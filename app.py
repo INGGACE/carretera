@@ -41,63 +41,50 @@ def cargar_datos():
 
 df = cargar_datos()
 
-# 3. Panel Lateral para Filtros (NUEVO FORMATO TIPO BOTÓN/TOGGLE)
+# 3. Panel Lateral para Filtros (NUEVO FORMATO: BOTONES DE UN CLIC)
 st.sidebar.header("🔘 Filtros Rápidos")
-st.sidebar.write("Haz clic para encender o apagar cada opción:")
 
-# -- FILTRO UF --
+# Función para agregar la opción "Todos" a las listas
+def agregar_todos(lista):
+    return ["Todos"] + list(lista)
+
+# -- FILTRO UF (Botones horizontales) --
 if 'UF' in df.columns:
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("**Unidad Funcional (UF)**")
     uf_unicas = df['UF'].unique().tolist()
-    # Crea un interruptor por cada UF y guarda los que estén encendidos (value=True)
-    uf_seleccionadas = [uf for uf in uf_unicas if st.sidebar.checkbox(uf, value=True, key=f"uf_{uf}")]
+    uf_seleccionada = st.sidebar.radio("Unidad Funcional (UF):", agregar_todos(uf_unicas), horizontal=True)
 else:
-    uf_seleccionadas = []
+    uf_seleccionada = "Todos"
 
-# -- FILTRO TRAMO --
+# -- FILTRO TRAMO (Botones horizontales) --
 if 'TR' in df.columns:
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("**Tramo (TR)**")
     tr_unicas = df['TR'].unique().tolist()
-    tr_seleccionados = [tr for tr in tr_unicas if st.sidebar.checkbox(tr, value=True, key=f"tr_{tr}")]
+    tr_seleccionado = st.sidebar.radio("Tramo (TR):", agregar_todos(tr_unicas), horizontal=True)
 else:
-    tr_seleccionados = []
+    tr_seleccionado = "Todos"
 
-# -- FILTRO CALZADA --
+# -- FILTRO CALZADA (Botones horizontales) --
 if 'calzada' in df.columns:
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("**Calzada**")
     calzada_unicas = df['calzada'].unique().tolist()
-    calzada_seleccionada = [calzada for calzada in calzada_unicas if st.sidebar.checkbox(calzada, value=True, key=f"cal_{calzada}")]
+    calzada_seleccionada = st.sidebar.radio("Calzada:", agregar_todos(calzada_unicas), horizontal=True)
 else:
-    calzada_seleccionada = []
-    
-# -- FILTRO CARRIL --
-if 'CARRIL' in df.columns:
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("**Carril**")
-    carril_unicos = df['CARRIL'].unique().tolist()
-    carril_seleccionado = [carril for carril in carril_unicos if st.sidebar.checkbox(carril, value=True, key=f"car_{carril}")]
-else:
-    carril_seleccionado = []
+    calzada_seleccionada = "Todos"
 
-# -- FILTRO CAPA --
+# -- FILTRO CAPA (Selector múltiple, porque suele ser útil ver varias capas al tiempo) --
 st.sidebar.markdown("---")
-st.sidebar.markdown("**Capa Estructural**")
 capas_unicas = df['Capa'].unique().tolist()
-capas_seleccionadas = [capa for capa in capas_unicas if st.sidebar.checkbox(capa, value=True, key=f"capa_{capa}")]
+capas_seleccionadas = st.sidebar.multiselect("Filtrar por Capa (puedes elegir varias):", capas_unicas, default=capas_unicas)
 
 # Aplicar filtros al DataFrame
 df_filtrado = df.copy()
-if 'UF' in df.columns:
-    df_filtrado = df_filtrado[df_filtrado['UF'].isin(uf_seleccionadas)]
-if 'TR' in df.columns:
-    df_filtrado = df_filtrado[df_filtrado['TR'].isin(tr_seleccionados)]
-if 'calzada' in df.columns:
-    df_filtrado = df_filtrado[df_filtrado['calzada'].isin(calzada_seleccionada)]
-if 'CARRIL' in df.columns:
-    df_filtrado = df_filtrado[df_filtrado['CARRIL'].isin(carril_seleccionado)]
+
+if uf_seleccionada != "Todos":
+    df_filtrado = df_filtrado[df_filtrado['UF'] == uf_seleccionada]
+
+if tr_seleccionado != "Todos":
+    df_filtrado = df_filtrado[df_filtrado['TR'] == tr_seleccionado]
+
+if calzada_seleccionada != "Todos":
+    df_filtrado = df_filtrado[df_filtrado['calzada'] == calzada_seleccionada]
     
 df_filtrado = df_filtrado[df_filtrado['Capa'].isin(capas_seleccionadas)]
 
