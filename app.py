@@ -41,37 +41,54 @@ def cargar_datos():
 
 df = cargar_datos()
 
-# 3. Panel Lateral para Filtros
-st.sidebar.header("Filtros de Visualización")
+# 3. Panel Lateral para Filtros (NUEVO FORMATO TIPO BOTÓN/TOGGLE)
+st.sidebar.header("🔘 Filtros Rápidos")
+st.sidebar.write("Haz clic para encender o apagar cada opción:")
 
+# -- FILTRO UF --
 if 'UF' in df.columns:
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("**Unidad Funcional (UF)**")
     uf_unicas = df['UF'].unique().tolist()
-    uf_seleccionadas = st.sidebar.multiselect("Filtrar por UF", uf_unicas, default=uf_unicas)
+    # Crea un interruptor por cada UF y guarda los que estén encendidos (value=True)
+    uf_seleccionadas = [uf for uf in uf_unicas if st.sidebar.checkbox(uf, value=True, key=f"uf_{uf}")]
 else:
     uf_seleccionadas = []
 
+# -- FILTRO TRAMO --
 if 'TR' in df.columns:
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("**Tramo (TR)**")
     tr_unicas = df['TR'].unique().tolist()
-    tr_seleccionados = st.sidebar.multiselect("Filtrar por Tramo", tr_unicas, default=tr_unicas)
+    tr_seleccionados = [tr for tr in tr_unicas if st.sidebar.checkbox(tr, value=True, key=f"tr_{tr}")]
 else:
     tr_seleccionados = []
 
+# -- FILTRO CALZADA --
 if 'calzada' in df.columns:
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("**Calzada**")
     calzada_unicas = df['calzada'].unique().tolist()
-    calzada_seleccionada = st.sidebar.multiselect("Filtrar por Calzada", calzada_unicas, default=calzada_unicas)
+    calzada_seleccionada = [calzada for calzada in calzada_unicas if st.sidebar.checkbox(calzada, value=True, key=f"cal_{calzada}")]
 else:
     calzada_seleccionada = []
     
+# -- FILTRO CARRIL --
 if 'CARRIL' in df.columns:
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("**Carril**")
     carril_unicos = df['CARRIL'].unique().tolist()
-    carril_seleccionado = st.sidebar.multiselect("Filtrar por Carril", carril_unicos, default=carril_unicos)
+    carril_seleccionado = [carril for carril in carril_unicos if st.sidebar.checkbox(carril, value=True, key=f"car_{carril}")]
 else:
     carril_seleccionado = []
 
+# -- FILTRO CAPA --
+st.sidebar.markdown("---")
+st.sidebar.markdown("**Capa Estructural**")
 capas_unicas = df['Capa'].unique().tolist()
-capas_seleccionadas = st.sidebar.multiselect("Filtrar por Capa", capas_unicas, default=capas_unicas)
+capas_seleccionadas = [capa for capa in capas_unicas if st.sidebar.checkbox(capa, value=True, key=f"capa_{capa}")]
 
-# Aplicar filtros
+# Aplicar filtros al DataFrame
 df_filtrado = df.copy()
 if 'UF' in df.columns:
     df_filtrado = df_filtrado[df_filtrado['UF'].isin(uf_seleccionadas)]
@@ -119,7 +136,7 @@ else:
         height=700,
         plot_bgcolor='white',
         hoverlabel=dict(bgcolor="white", font_size=14),
-        hoverdistance=10, # Hace que el cuadro flotante responda más rápido al acercarse al bloque
+        hoverdistance=10, 
     )
     
     # Eje X con línea vertical roja gruesa
