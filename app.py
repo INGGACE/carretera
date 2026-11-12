@@ -89,3 +89,31 @@ else:
         hover_name="Capa",
         hover_data={
             'Abscisa_Inicial': True,
+            'Abscisa_Final': True,
+            'Longitud': False,
+            'Capa': False,
+            'FECHA DE EXTENSIÓN': True,
+            'calzada': True,
+            'CARRIL': True,
+            'UF': True,
+            'TR': True,
+            'observación': True
+        },
+        title="Diagrama de Vía (Pasa el cursor sobre los tramos para ver detalles)"
+    )
+
+    fig.update_layout(
+        xaxis_title="Abscisas (Metros lineales)",
+        yaxis_title="Estructura del Pavimento",
+        barmode='overlay',
+        height=600,
+        plot_bgcolor='white',
+        hoverlabel=dict(bgcolor="white", font_size=14)
+    )
+    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='lightgray', tick0=0, dtick=500)
+
+    # 5. Renderizar elementos
+    st.plotly_chart(fig, use_container_width=True)
+
+st.subheader("Base de Datos Dinámica")
+st.dataframe(df_filtrado, use_container_width=True)
