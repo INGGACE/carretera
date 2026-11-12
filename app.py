@@ -47,6 +47,7 @@ st.sidebar.header("🔘 Filtros Rápidos")
 def agregar_todos(lista):
     return ["Todos"] + list(lista)
 
+# Filtros de un solo clic (Radio buttons)
 if 'UF' in df.columns:
     uf_unicas = df['UF'].unique().tolist()
     uf_seleccionada = st.sidebar.radio("Unidad Funcional (UF):", agregar_todos(uf_unicas), horizontal=True)
@@ -65,14 +66,15 @@ if 'calzada' in df.columns:
 else:
     calzada_seleccionada = "Todos"
 
-# -- FILTRO CARRIL RESTAURADO --
+st.sidebar.markdown("---")
+
+# Filtros de selección múltiple
 if 'CARRIL' in df.columns:
     carril_unicos = df['CARRIL'].unique().tolist()
-    carril_seleccionado = st.sidebar.radio("Carril:", agregar_todos(carril_unicos), horizontal=True)
+    carril_seleccionados = st.sidebar.multiselect("Filtrar por Carril (puedes elegir varios):", carril_unicos, default=carril_unicos)
 else:
-    carril_seleccionado = "Todos"
+    carril_seleccionados = []
 
-st.sidebar.markdown("---")
 capas_unicas = df['Capa'].unique().tolist()
 capas_seleccionadas = st.sidebar.multiselect("Filtrar por Capa (puedes elegir varias):", capas_unicas, default=capas_unicas)
 
@@ -85,8 +87,8 @@ if tr_seleccionado != "Todos":
     df_filtrado = df_filtrado[df_filtrado['TR'] == tr_seleccionado]
 if calzada_seleccionada != "Todos":
     df_filtrado = df_filtrado[df_filtrado['calzada'] == calzada_seleccionada]
-if carril_seleccionado != "Todos":
-    df_filtrado = df_filtrado[df_filtrado['CARRIL'] == carril_seleccionado]
+if 'CARRIL' in df.columns:
+    df_filtrado = df_filtrado[df_filtrado['CARRIL'].isin(carril_seleccionados)]
     
 df_filtrado = df_filtrado[df_filtrado['Capa'].isin(capas_seleccionadas)]
 
