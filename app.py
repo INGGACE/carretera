@@ -14,11 +14,15 @@ def cargar_datos():
     # Leemos el archivo CSV
     df = pd.read_csv(url)
     
-    # TRUCO: Limpiar los espacios invisibles al inicio o al final de los nombres de las columnas
+    # Limpiar espacios invisibles en los nombres de las columnas
     df.columns = df.columns.str.strip()
     
-    # Mostrar en la pantalla qué columnas encontró realmente el programa para que puedas verificar
-    st.write("🔍 Columnas detectadas en tu Excel:", df.columns.tolist())
+    # TRUCO NUEVO: Limpiar las abscisas (quitar letras, K, signos +) y forzarlas a ser números
+    df['Abscisa_Inicial'] = df['Abscisa_Inicial'].astype(str).str.replace(r'[a-zA-Z\+]', '', regex=True)
+    df['Abscisa_Inicial'] = pd.to_numeric(df['Abscisa_Inicial'], errors='coerce')
+    
+    df['Abscisa_Final'] = df['Abscisa_Final'].astype(str).str.replace(r'[a-zA-Z\+]', '', regex=True)
+    df['Abscisa_Final'] = pd.to_numeric(df['Abscisa_Final'], errors='coerce')
     
     # Calcular la longitud del tramo para el eje X
     df['Longitud'] = df['Abscisa_Final'] - df['Abscisa_Inicial']
@@ -35,12 +39,11 @@ df = cargar_datos()
 st.sidebar.header("Filtros de Visualización")
 capas_seleccionadas = st.sidebar.multiselect("Filtrar por Capa", df['Capa'].dropna().unique(), default=df['Capa'].dropna().unique())
 
-# Verificamos si existe la columna "Estado"
+# Verificamos si existe la columna "Estado" o usamos otra para colorear
 if 'Estado' in df.columns:
     estado_seleccionado = st.sidebar.multiselect("Filtrar por Estado", df['Estado'].dropna().unique(), default=df['Estado'].dropna().unique())
     df_filtrado = df[(df['Capa'].isin(capas_seleccionadas)) & (df['Estado'].isin(estado_seleccionado))]
     color_col = "Estado"
-    
     color_map = {
         'Aprobado': '#2ecc71',
         'Ejecución': '#f1c40f',
@@ -48,7 +51,7 @@ if 'Estado' in df.columns:
         'Vacío': '#95a5a6'
     }
 else:
-    # Si no hay columna Estado, solo filtra por capa
+    # Si no tienes la columna "Estado", colorearemos el gráfico por la "Capa"
     df_filtrado = df[(df['Capa'].isin(capas_seleccionadas))]
     color_col = "Capa"
     color_map = None
@@ -67,7 +70,11 @@ fig = px.bar(
         'Abscisa_Inicial': True,
         'Abscisa_Final': True,
         'Longitud': False,
-        'Capa': False
+        'Capa': False,
+        'FECHA DE EXTENSIÓN': True, # Se agregó desde tu Excel
+        'calzada': True,            # Se agregó desde tu Excel
+        'CARRIL': True,             # Se agregó desde tu Excel
+        'observación': True         # Se agregó desde tu Excel
     },
     title="Diagrama de Vía (Pasa el cursor sobre los tramos para ver detalles)"
 )
