@@ -11,8 +11,14 @@ st.title("🚧 Visualizador de Avance Constructivo por Capas")
 def cargar_datos():
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTO7xn_vRtSKs38siACAWRJgQ00_nmwv4J3dRDczwsbWNtOVhnHIP45zcl9UILR_g/pub?gid=403930580&single=true&output=csv"
     
-    # Leemos el archivo CSV (Alineación corregida a 4 espacios)
+    # Leemos el archivo CSV
     df = pd.read_csv(url)
+    
+    # TRUCO: Limpiar los espacios invisibles al inicio o al final de los nombres de las columnas
+    df.columns = df.columns.str.strip()
+    
+    # Mostrar en la pantalla qué columnas encontró realmente el programa para que puedas verificar
+    st.write("🔍 Columnas detectadas en tu Excel:", df.columns.tolist())
     
     # Calcular la longitud del tramo para el eje X
     df['Longitud'] = df['Abscisa_Final'] - df['Abscisa_Inicial']
