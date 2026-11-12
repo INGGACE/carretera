@@ -10,7 +10,7 @@ st.title("🚧 Visualizador de Avance Constructivo por Capas")
 @st.cache_data(ttl=600)
 def cargar_datos():
     # PEGA TU ENLACE ENTRE LAS COMILLAS
-    url =https://drive.google.com/file/d/1A0pKbDRB6OwM5FE0V-hj3dm0E9I6XD5j/view
+    "https://docs.google.com/spreadsheets/d/e/2PACX-1vTO7xn_vRtSKs38siACAWRJgQ00_nmwv4J3dRDczwsbWNtOVhnHIP45zcl9UILR_g/pub?gid=403930580&single=true&output=csv"
     
     # Si usas Google Sheets, usa esta línea (déjala sin el símbolo #):
     df = pd.read_csv(url)
