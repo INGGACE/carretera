@@ -42,7 +42,7 @@ def cargar_datos():
         if col in df.columns:
             df[col] = df[col].fillna(f"Sin {col}").astype(str)
             
-    # Manejo de las nuevas columnas de ensayos (Se crean vacías si no existen en tu Excel aún)
+    # Manejo de las nuevas columnas de ensayos
     ensayos = ['Planicidad', 'Densidad', 'Textura', 'Deslizamiento']
     for ensayo in ensayos:
         if ensayo in df.columns:
@@ -99,16 +99,42 @@ if calzada_seleccionada != "Todos": df_filtrado = df_filtrado[df_filtrado['calza
 if 'CARRIL' in df.columns: df_filtrado = df_filtrado[df_filtrado['CARRIL'].isin(carril_seleccionados)]
 df_filtrado = df_filtrado[df_filtrado['Capa'].isin(capas_seleccionadas)]
 
+st.title("🚧 Sistema de Gestión Vial")
+
+# ==========================================
+# 📈 NUEVO: TARJETAS DE INDICADORES (KPIs)
+# ==========================================
+st.markdown("### Resumen de Ejecución")
+col1, col2, col3, col4 = st.columns(4)
+
+# KPI 1: Tramos ejecutados
+total_tramos = len(df_filtrado)
+col1.metric(label="Tramos Registrados", value=f"{total_tramos}")
+
+# KPI 2: Longitud Total extendida (Suma de las longitudes de todas las capas filtradas)
+longitud_total = df_filtrado['Longitud'].sum()
+col2.metric(label="Longitud Ejecutada (m)", value=f"{longitud_total:,.0f} m")
+
+# KPI 3: Kilómetros equivalentes
+km_totales = longitud_total / 1000
+col3.metric(label="Kilómetros Totales (km)", value=f"{km_totales:,.2f} km")
+
+# KPI 4: Tramos pendientes de ensayo de Planicidad (Ejemplo de métrica de calidad)
+if 'Planicidad' in df_filtrado.columns:
+    tramos_sin_planicidad = len(df_filtrado[df_filtrado['Planicidad'].str.contains('No reportado|Falta', case=False, na=True)])
+    col4.metric(label="Sin ensayo de Planicidad", value=f"{tramos_sin_planicidad} tramos")
+else:
+    col4.metric(label="Filtro Activo", value="Sí")
+
+st.markdown("---")
 
 # ==========================================
 # 4. SISTEMA DE PESTAÑAS (TABS)
 # ==========================================
-st.title("🚧 Sistema de Gestión Vial")
 tab1, tab2 = st.tabs(["📊 Avance Físico (Trazabilidad)", "🔬 Control de Ensayos (Laboratorio)"])
 
-# ----- PESTAÑA 1: AVANCE FÍSICO (Como estaba antes) -----
+# ----- PESTAÑA 1: AVANCE FÍSICO -----
 with tab1:
-    st.subheader("Avance Constructivo por Capas")
     if df_filtrado.empty:
         st.warning("No hay datos para mostrar.")
     else:
@@ -124,19 +150,14 @@ with tab1:
 
 # ----- PESTAÑA 2: CONTROL DE ENSAYOS -----
 with tab2:
-    st.subheader("Estado de Ensayos Técnicos")
     st.write("Selecciona el ensayo que deseas evaluar. El gráfico coloreará los tramos según el estado del resultado.")
-    
-    # Selector exclusivo de la pestaña 2 para elegir qué ensayo queremos revisar
     ensayo_a_revisar = st.radio("Ensayo a visualizar:", ['Planicidad', 'Densidad', 'Textura', 'Deslizamiento'], horizontal=True)
     
     if df_filtrado.empty:
         st.warning("No hay datos para mostrar.")
     else:
-        # Aquí coloreamos usando la columna del ensayo seleccionado en lugar de la 'Capa'
         fig2 = px.bar(
-            df_filtrado, base="Abscisa_Inicial", x="Longitud", y="Capa_Carril", 
-            color=ensayo_a_revisar, # MAGIA AQUÍ: El color depende del ensayo
+            df_filtrado, base="Abscisa_Inicial", x="Longitud", y="Capa_Carril", color=ensayo_a_revisar, 
             orientation='h', hover_name="Capa",
             hover_data={
                 'Abscisa_Inicial': True, 'Abscisa_Final': True, 'Longitud': False, 'Capa_Carril': False, 'Capa': False,
