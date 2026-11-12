@@ -4,9 +4,38 @@ import plotly.express as px
 
 # 1. Configuración de la página
 st.set_page_config(layout="wide", page_title="Avance de Obra Vial")
+
+# ==========================================
+# 🔒 SISTEMA DE SEGURIDAD (CONTRASEÑA)
+# ==========================================
+# Crear la "memoria" del navegador para saber si ya inició sesión
+if "acceso_permitido" not in st.session_state:
+    st.session_state["acceso_permitido"] = False
+
+# Si no ha iniciado sesión, mostrar la pantalla de bloqueo
+if not st.session_state["acceso_permitido"]:
+    st.title("🔒 Acceso Restringido")
+    st.write("Ingresa la contraseña para visualizar el avance de la obra.")
+    
+    # Cajón para escribir la contraseña (los caracteres se verán como puntitos)
+    clave_ingresada = st.text_input("Contraseña:", type="password")
+    
+    if st.button("Ingresar"):
+        # AQUÍ DEFINES TU CONTRASEÑA (Actualmente es Obra2026)
+        if clave_ingresada == "Obra2026":
+            st.session_state["acceso_permitido"] = True
+            st.rerun() # Recarga la página para mostrar el tablero
+        else:
+            st.error("Contraseña incorrecta. Intenta nuevamente.")
+            
+    # La instrucción st.stop() detiene el programa aquí. No se lee el Excel si no hay clave.
+    st.stop()
+
+# ==========================================
+# 🚧 TABLERO DE OBRA (Solo visible si la clave es correcta)
+# ==========================================
 st.title("🚧 Visualizador de Avance Constructivo por Capas y Carriles")
 
-# 2. Cargar los datos
 @st.cache_data(ttl=600)
 def cargar_datos():
     url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTO7xn_vRtSKs38siACAWRJgQ00_nmwv4J3dRDczwsbWNtOVhnHIP45zcl9UILR_g/pub?gid=403930580&single=true&output=csv"
@@ -41,13 +70,19 @@ def cargar_datos():
 
 df = cargar_datos()
 
-# 3. Panel Lateral para Filtros
+# Panel Lateral para Filtros
 st.sidebar.header("🔘 Filtros Rápidos")
+
+# Botón para cerrar sesión
+if st.sidebar.button("Salir / Cerrar Sesión"):
+    st.session_state["acceso_permitido"] = False
+    st.rerun()
+
+st.sidebar.markdown("---")
 
 def agregar_todos(lista):
     return ["Todos"] + list(lista)
 
-# Filtros de un solo clic (Radio buttons)
 if 'UF' in df.columns:
     uf_unicas = df['UF'].unique().tolist()
     uf_seleccionada = st.sidebar.radio("Unidad Funcional (UF):", agregar_todos(uf_unicas), horizontal=True)
@@ -68,7 +103,6 @@ else:
 
 st.sidebar.markdown("---")
 
-# Filtros de selección múltiple
 if 'CARRIL' in df.columns:
     carril_unicos = df['CARRIL'].unique().tolist()
     carril_seleccionados = st.sidebar.multiselect("Filtrar por Carril (puedes elegir varios):", carril_unicos, default=carril_unicos)
@@ -78,7 +112,7 @@ else:
 capas_unicas = df['Capa'].unique().tolist()
 capas_seleccionadas = st.sidebar.multiselect("Filtrar por Capa (puedes elegir varias):", capas_unicas, default=capas_unicas)
 
-# Aplicar filtros al DataFrame
+# Aplicar filtros
 df_filtrado = df.copy()
 
 if uf_seleccionada != "Todos":
@@ -92,7 +126,7 @@ if 'CARRIL' in df.columns:
     
 df_filtrado = df_filtrado[df_filtrado['Capa'].isin(capas_seleccionadas)]
 
-# 4. Configuración del Gráfico
+# Configuración del Gráfico
 if df_filtrado.empty:
     st.warning("No hay datos para mostrar con los filtros seleccionados.")
 else:
