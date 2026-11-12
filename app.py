@@ -24,11 +24,13 @@ def cargar_datos():
     df['Longitud'] = df['Abscisa_Final'] - df['Abscisa_Inicial']
     df['Capa'] = df['Capa'].fillna("Sin definir").astype(str)
     
-    # Asegurar que UF y TR sean texto y quitar nulos para evitar errores en los filtros
+    # Asegurar que UF, TR y calzada sean texto para evitar errores en los filtros
     if 'UF' in df.columns:
         df['UF'] = df['UF'].fillna("Sin UF").astype(str)
     if 'TR' in df.columns:
         df['TR'] = df['TR'].fillna("Sin TR").astype(str)
+    if 'calzada' in df.columns:
+        df['calzada'] = df['calzada'].fillna("Sin calzada").astype(str)
         
     return df
 
@@ -51,6 +53,13 @@ if 'TR' in df.columns:
 else:
     tr_seleccionados = []
 
+# -- FILTRO CALZADA (NUEVO) --
+if 'calzada' in df.columns:
+    calzada_unicas = df['calzada'].unique().tolist()
+    calzada_seleccionada = st.sidebar.multiselect("Filtrar por Calzada", calzada_unicas, default=calzada_unicas)
+else:
+    calzada_seleccionada = []
+
 # -- FILTRO CAPA --
 capas_unicas = df['Capa'].unique().tolist()
 capas_seleccionadas = st.sidebar.multiselect("Filtrar por Capa", capas_unicas, default=capas_unicas)
@@ -61,11 +70,12 @@ if 'UF' in df.columns:
     df_filtrado = df_filtrado[df_filtrado['UF'].isin(uf_seleccionadas)]
 if 'TR' in df.columns:
     df_filtrado = df_filtrado[df_filtrado['TR'].isin(tr_seleccionados)]
+if 'calzada' in df.columns:
+    df_filtrado = df_filtrado[df_filtrado['calzada'].isin(calzada_seleccionada)]
+    
 df_filtrado = df_filtrado[df_filtrado['Capa'].isin(capas_seleccionadas)]
 
-
 # 4. Configuración del Gráfico
-# Validamos que no quede vacío después de filtrar para no generar un error visual
 if df_filtrado.empty:
     st.warning("No hay datos para mostrar con los filtros seleccionados.")
 else:
@@ -79,31 +89,3 @@ else:
         hover_name="Capa",
         hover_data={
             'Abscisa_Inicial': True,
-            'Abscisa_Final': True,
-            'Longitud': False,
-            'Capa': False,
-            'FECHA DE EXTENSIÓN': True,
-            'calzada': True,
-            'CARRIL': True,
-            'UF': True,
-            'TR': True,
-            'observación': True
-        },
-        title="Diagrama de Vía (Pasa el cursor sobre los tramos para ver detalles)"
-    )
-
-    fig.update_layout(
-        xaxis_title="Abscisas (Metros lineales)",
-        yaxis_title="Estructura del Pavimento",
-        barmode='overlay',
-        height=600,
-        plot_bgcolor='white',
-        hoverlabel=dict(bgcolor="white", font_size=14)
-    )
-    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='lightgray', tick0=0, dtick=500)
-
-    # 5. Renderizar elementos
-    st.plotly_chart(fig, use_container_width=True)
-
-st.subheader("Base de Datos Dinámica")
-st.dataframe(df_filtrado, use_container_width=True)
