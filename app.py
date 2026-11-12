@@ -41,35 +41,37 @@ def cargar_datos():
 
 df = cargar_datos()
 
-# 3. Panel Lateral para Filtros (NUEVO FORMATO: BOTONES DE UN CLIC)
+# 3. Panel Lateral para Filtros
 st.sidebar.header("🔘 Filtros Rápidos")
 
-# Función para agregar la opción "Todos" a las listas
 def agregar_todos(lista):
     return ["Todos"] + list(lista)
 
-# -- FILTRO UF (Botones horizontales) --
 if 'UF' in df.columns:
     uf_unicas = df['UF'].unique().tolist()
     uf_seleccionada = st.sidebar.radio("Unidad Funcional (UF):", agregar_todos(uf_unicas), horizontal=True)
 else:
     uf_seleccionada = "Todos"
 
-# -- FILTRO TRAMO (Botones horizontales) --
 if 'TR' in df.columns:
     tr_unicas = df['TR'].unique().tolist()
     tr_seleccionado = st.sidebar.radio("Tramo (TR):", agregar_todos(tr_unicas), horizontal=True)
 else:
     tr_seleccionado = "Todos"
 
-# -- FILTRO CALZADA (Botones horizontales) --
 if 'calzada' in df.columns:
     calzada_unicas = df['calzada'].unique().tolist()
     calzada_seleccionada = st.sidebar.radio("Calzada:", agregar_todos(calzada_unicas), horizontal=True)
 else:
     calzada_seleccionada = "Todos"
 
-# -- FILTRO CAPA (Selector múltiple, porque suele ser útil ver varias capas al tiempo) --
+# -- FILTRO CARRIL RESTAURADO --
+if 'CARRIL' in df.columns:
+    carril_unicos = df['CARRIL'].unique().tolist()
+    carril_seleccionado = st.sidebar.radio("Carril:", agregar_todos(carril_unicos), horizontal=True)
+else:
+    carril_seleccionado = "Todos"
+
 st.sidebar.markdown("---")
 capas_unicas = df['Capa'].unique().tolist()
 capas_seleccionadas = st.sidebar.multiselect("Filtrar por Capa (puedes elegir varias):", capas_unicas, default=capas_unicas)
@@ -79,12 +81,12 @@ df_filtrado = df.copy()
 
 if uf_seleccionada != "Todos":
     df_filtrado = df_filtrado[df_filtrado['UF'] == uf_seleccionada]
-
 if tr_seleccionado != "Todos":
     df_filtrado = df_filtrado[df_filtrado['TR'] == tr_seleccionado]
-
 if calzada_seleccionada != "Todos":
     df_filtrado = df_filtrado[df_filtrado['calzada'] == calzada_seleccionada]
+if carril_seleccionado != "Todos":
+    df_filtrado = df_filtrado[df_filtrado['CARRIL'] == carril_seleccionado]
     
 df_filtrado = df_filtrado[df_filtrado['Capa'].isin(capas_seleccionadas)]
 
@@ -126,14 +128,12 @@ else:
         hoverdistance=10, 
     )
     
-    # Eje X con línea vertical roja gruesa
     fig.update_xaxes(
         showgrid=True, gridwidth=1, gridcolor='lightgray', tick0=0, dtick=500,
         showspikes=True, spikemode="across", spikesnap="cursor", showline=True, 
         spikedash="solid", spikecolor="red", spikethickness=2
     )
     
-    # Eje Y con línea horizontal roja gruesa (completa la cruz)
     fig.update_yaxes(
         categoryorder='category ascending',
         showspikes=True, spikemode="across", spikesnap="cursor", 
