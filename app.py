@@ -36,8 +36,8 @@ def cargar_datos():
     df['Longitud'] = df['Abscisa_Final'] - df['Abscisa_Inicial']
     df['Capa'] = df['Capa'].fillna("Sin definir").astype(str)
     
-    # Manejo de columnas estándar
-    columnas_texto = ['UF', 'TR', 'calzada', 'CARRIL']
+    # Manejo de columnas estándar (incluyendo 'num' para el número de capa)
+    columnas_texto = ['UF', 'TR', 'calzada', 'CARRIL', 'num']
     for col in columnas_texto:
         if col in df.columns:
             df[col] = df[col].fillna(f"Sin {col}").astype(str)
@@ -50,8 +50,13 @@ def cargar_datos():
         else:
             df[ensayo] = "Columna no encontrada"
             
-    if 'CARRIL' in df.columns:
+    # Ajustar el eje Y para mostrar Capa + Número (si existe) + Carril
+    if 'CARRIL' in df.columns and 'num' in df.columns:
+        df['Capa_Carril'] = df['Capa'] + " " + df['num'] + " | " + df['CARRIL']
+    elif 'CARRIL' in df.columns:
         df['Capa_Carril'] = df['Capa'] + " | " + df['CARRIL']
+    elif 'num' in df.columns:
+         df['Capa_Carril'] = df['Capa'] + " " + df['num']
     else:
         df['Capa_Carril'] = df['Capa']
         
@@ -89,7 +94,14 @@ if 'CARRIL' in df.columns:
 else:
     carril_seleccionados = []
 
-capas_seleccionadas = st.sidebar.multiselect("Filtrar por Capa:", df['Capa'].unique(), default=df['Capa'].unique())
+capas_seleccionadas = st.sidebar.multiselect("Filtrar por Tipo de Capa:", df['Capa'].unique(), default=df['Capa'].unique())
+
+# -- NUEVO: FILTRO POR NÚMERO DE CAPA --
+if 'num' in df.columns:
+    num_capa_seleccionados = st.sidebar.multiselect("Filtrar por Número de Capa:", df['num'].unique(), default=df['num'].unique())
+else:
+    num_capa_seleccionados = []
+
 
 # Filtro general aplicado a todo
 df_filtrado = df.copy()
@@ -99,27 +111,25 @@ if calzada_seleccionada != "Todos": df_filtrado = df_filtrado[df_filtrado['calza
 if 'CARRIL' in df.columns: df_filtrado = df_filtrado[df_filtrado['CARRIL'].isin(carril_seleccionados)]
 df_filtrado = df_filtrado[df_filtrado['Capa'].isin(capas_seleccionadas)]
 
+if 'num' in df.columns: 
+    df_filtrado = df_filtrado[df_filtrado['num'].isin(num_capa_seleccionados)]
+
+
 st.title("🚧 Sistema de Gestión Vial")
 
-# ==========================================
-# 📈 NUEVO: TARJETAS DE INDICADORES (KPIs)
-# ==========================================
+# 📈 TARJETAS DE INDICADORES (KPIs)
 st.markdown("### Resumen de Ejecución")
 col1, col2, col3, col4 = st.columns(4)
 
-# KPI 1: Tramos ejecutados
 total_tramos = len(df_filtrado)
 col1.metric(label="Tramos Registrados", value=f"{total_tramos}")
 
-# KPI 2: Longitud Total extendida (Suma de las longitudes de todas las capas filtradas)
 longitud_total = df_filtrado['Longitud'].sum()
 col2.metric(label="Longitud Ejecutada (m)", value=f"{longitud_total:,.0f} m")
 
-# KPI 3: Kilómetros equivalentes
 km_totales = longitud_total / 1000
 col3.metric(label="Kilómetros Totales (km)", value=f"{km_totales:,.2f} km")
 
-# KPI 4: Tramos pendientes de ensayo de Planicidad (Ejemplo de métrica de calidad)
 if 'Planicidad' in df_filtrado.columns:
     tramos_sin_planicidad = len(df_filtrado[df_filtrado['Planicidad'].str.contains('No reportado|Falta', case=False, na=True)])
     col4.metric(label="Sin ensayo de Planicidad", value=f"{tramos_sin_planicidad} tramos")
@@ -128,9 +138,7 @@ else:
 
 st.markdown("---")
 
-# ==========================================
 # 4. SISTEMA DE PESTAÑAS (TABS)
-# ==========================================
 tab1, tab2 = st.tabs(["📊 Avance Físico (Trazabilidad)", "🔬 Control de Ensayos (Laboratorio)"])
 
 # ----- PESTAÑA 1: AVANCE FÍSICO -----
@@ -141,9 +149,9 @@ with tab1:
         fig1 = px.bar(
             df_filtrado, base="Abscisa_Inicial", x="Longitud", y="Capa_Carril", color="Capa",    
             orientation='h', hover_name="Capa",
-            hover_data={'Abscisa_Inicial': True, 'Abscisa_Final': True, 'Longitud': False, 'Capa_Carril': False, 'Capa': False, 'FECHA DE EXTENSIÓN': True, 'calzada': True, 'observación': True}
+            hover_data={'Abscisa_Inicial': True, 'Abscisa_Final': True, 'Longitud': False, 'Capa_Carril': False, 'Capa': False, 'num': True, 'FECHA DE EXTENSIÓN': True, 'calzada': True, 'observación': True}
         )
-        fig1.update_layout(xaxis_title="Abscisas", yaxis_title="Capa | Carril", barmode='overlay', height=700, plot_bgcolor='white', hoverdistance=10)
+        fig1.update_layout(xaxis_title="Abscisas", yaxis_title="Capa (Num) | Carril", barmode='overlay', height=700, plot_bgcolor='white', hoverdistance=10)
         fig1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='lightgray', tick0=0, dtick=500, showspikes=True, spikemode="across", spikesnap="cursor", showline=True, spikedash="solid", spikecolor="red", spikethickness=2)
         fig1.update_yaxes(categoryorder='category ascending', showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="red", spikethickness=2)
         st.plotly_chart(fig1, use_container_width=True)
@@ -160,16 +168,15 @@ with tab2:
             df_filtrado, base="Abscisa_Inicial", x="Longitud", y="Capa_Carril", color=ensayo_a_revisar, 
             orientation='h', hover_name="Capa",
             hover_data={
-                'Abscisa_Inicial': True, 'Abscisa_Final': True, 'Longitud': False, 'Capa_Carril': False, 'Capa': False,
+                'Abscisa_Inicial': True, 'Abscisa_Final': True, 'Longitud': False, 'Capa_Carril': False, 'Capa': False, 'num': True,
                 'Planicidad': True, 'Densidad': True, 'Textura': True, 'Deslizamiento': True
             }
         )
-        fig2.update_layout(xaxis_title="Abscisas", yaxis_title="Capa | Carril", barmode='overlay', height=700, plot_bgcolor='white', hoverdistance=10)
+        fig2.update_layout(xaxis_title="Abscisas", yaxis_title="Capa (Num) | Carril", barmode='overlay', height=700, plot_bgcolor='white', hoverdistance=10)
         fig2.update_xaxes(showgrid=True, gridwidth=1, gridcolor='lightgray', tick0=0, dtick=500, showspikes=True, spikemode="across", spikesnap="cursor", showline=True, spikedash="solid", spikecolor="red", spikethickness=2)
         fig2.update_yaxes(categoryorder='category ascending', showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="red", spikethickness=2)
         st.plotly_chart(fig2, use_container_width=True)
 
-# Tabla visible en ambas pestañas al final de la página
 st.markdown("---")
 st.subheader("Base de Datos Dinámica")
 st.dataframe(df_filtrado, use_container_width=True)
