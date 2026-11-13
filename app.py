@@ -36,8 +36,9 @@ def cargar_datos():
     df['Longitud'] = df['Abscisa_Final'] - df['Abscisa_Inicial']
     df['Capa'] = df['Capa'].fillna("Sin definir").astype(str)
     
-    # Limpiar y extraer espesores (ESP cm)
+    # 🔴 NUEVO: Limpiar y extraer solo los números de la columna de espesores (ESP cm)
     if 'ESP cm' in df.columns:
+        # Quitamos letras, dejamos solo números, puntos y comas, y forzamos a numérico
         df['ESP cm'] = df['ESP cm'].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.')
         df['ESP cm'] = pd.to_numeric(df['ESP cm'], errors='coerce').fillna(0)
     
@@ -171,64 +172,46 @@ with tab2:
         fig2.update_yaxes(categoryorder='category ascending', showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="red", spikethickness=2)
         st.plotly_chart(fig2, use_container_width=True)
 
-# ----- PESTAÑA 3: PERFIL DE ESPESORES ACUMULADO -----
+# ----- NUEVA PESTAÑA 3: PERFIL DE ESPESORES -----
 with tab3:
-    st.subheader("Estructura del Pavimento (Perfil de Espesores)")
+    st.subheader("Estructura del Pavimento (Perfil Transversal / Longitudinal)")
+    st.info("💡 **Consejo:** Para ver un perfil real sin espesores duplicados, asegúrate de **filtrar un solo Carril** en el menú de la izquierda.")
     
     if df_filtrado.empty or 'ESP cm' not in df_filtrado.columns:
         st.warning("No hay datos de espesor para mostrar. Verifica que tu Excel tenga la columna 'ESP cm'.")
     elif df_filtrado['ESP cm'].sum() == 0:
         st.warning("Todos los valores de espesor son cero o están vacíos en los tramos filtrados.")
     else:
+        # Preparamos los datos: creamos una etiqueta unida del tramo para el eje X
         df_espesores = df_filtrado.copy()
         
-        # 1. Crear formato de abscisa tipo ingeniería (Ej: K1+500)
-        df_espesores['Abscisa_Format'] = "K" + (df_espesores['Abscisa_Inicial'] // 1000).astype(int).astype(str) + "+" + (df_espesores['Abscisa_Inicial'] % 1000).astype(int).astype(str).str.zfill(3)
+        # Etiqueta categórica para agrupar las barras (Ej: "K1000 - K1500")
+        df_espesores['Rango_Abscisa'] = df_espesores['Abscisa_Inicial'].astype(int).astype(str) + " a " + df_espesores['Abscisa_Final'].astype(int).astype(str)
         
-        # 2. Ordenar cronológicamente/espacialmente para que la gráfica tenga sentido
+        # Ordenamos de menor a mayor abscisa para que el gráfico tenga sentido vial
         df_espesores = df_espesores.sort_values(by=['Abscisa_Inicial', 'Capa'])
-        orden_x = df_espesores['Abscisa_Format'].unique()
         
-        # 3. Graficar con separación automática por Carril (facet_row)
-        # Esto crea gráficos independientes hacia abajo si tienes más de un carril seleccionado
-        carriles_presentes = df_espesores['CARRIL'].unique() if 'CARRIL' in df_espesores.columns else []
+        # Gráfico de barras apiladas verticales (Pastel estructural)
+        fig3 = px.bar(
+            df_espesores,
+            x="Rango_Abscisa",
+            y="ESP cm",
+            color="Capa",
+            hover_name="Capa",
+            hover_data={'Rango_Abscisa': False, 'CARRIL': True, 'num': True, 'ESP cm': True},
+            title="Espesores Instalados por Tramo (cm)"
+        )
         
-        if len(carriles_presentes) > 1:
-            alto_grafico = max(600, 300 * len(carriles_presentes)) # Ajusta la altura si hay muchos carriles
-            fig3 = px.bar(
-                df_espesores,
-                x="Abscisa_Format",
-                y="ESP cm",
-                color="Capa",
-                facet_row="CARRIL", # Magia pura: crea una fila por cada carril
-                hover_name="Capa",
-                hover_data={'Abscisa_Format': False, 'Abscisa_Inicial': True, 'Abscisa_Final': True, 'num': True, 'ESP cm': True},
-                title="Espesor Acumulado por Abscisa y Carril",
-                barmode='stack' # Apila los centímetros uno sobre otro
-            )
-        else:
-            alto_grafico = 600
-            fig3 = px.bar(
-                df_espesores,
-                x="Abscisa_Format",
-                y="ESP cm",
-                color="Capa",
-                hover_name="Capa",
-                hover_data={'Abscisa_Format': False, 'Abscisa_Inicial': True, 'Abscisa_Final': True, 'num': True, 'ESP cm': True},
-                title="Espesor Acumulado por Abscisa",
-                barmode='stack'
-            )
-            
         fig3.update_layout(
-            xaxis_title="Abscisa de Inicio",
-            yaxis_title="Espesor Total (cm)",
-            height=alto_grafico,
+            xaxis_title="Tramos (Abscisa Inicial a Final)",
+            yaxis_title="Espesor (cm)",
+            barmode='stack', # Apila las capas una encima de otra
+            height=600,
             plot_bgcolor='white',
             hoverlabel=dict(bgcolor="white", font_size=14)
         )
         
-        # Forzar el orden correcto en el eje X
-        fig3.update_xaxes(showgrid=True, gridcolor='lightgray', type='category', categoryorder='array', categoryarray=orden_x)
+        fig3.update_xaxes(showgrid=True, gridcolor='lightgray', type='category')
         fig3.update_yaxes(showgrid=True, gridcolor='lightgray')
         
         st.plotly_chart(fig3, use_container_width=True)
