@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import datetime
 
 # 1. Configuración y Seguridad
 st.set_page_config(layout="wide", page_title="Avance de Obra Vial")
@@ -37,9 +36,9 @@ def cargar_datos():
     df['Longitud'] = df['Abscisa_Final'] - df['Abscisa_Inicial']
     df['Capa'] = df['Capa'].fillna("Sin definir").astype(str)
     
-    # NUEVO: Convertir la columna de fechas a un formato de tiempo real (DateTime)
+    # 🔴 SOLUCIÓN FECHAS: Le decimos a Python que el día va primero (dayfirst=True)
     if 'FECHA DE EXTENSIÓN' in df.columns:
-        df['Fecha_Real'] = pd.to_datetime(df['FECHA DE EXTENSIÓN'], errors='coerce')
+        df['Fecha_Real'] = pd.to_datetime(df['FECHA DE EXTENSIÓN'], errors='coerce', dayfirst=True)
     
     columnas_texto = ['UF', 'TR', 'calzada', 'CARRIL', 'num']
     for col in columnas_texto:
@@ -77,21 +76,18 @@ def agregar_todos(lista): return ["Todos"] + list(lista)
 
 df_filtrado = df.copy()
 
-# -- 1. FILTRO UF --
 if 'UF' in df_filtrado.columns:
     opciones_uf = agregar_todos(df_filtrado['UF'].unique())
     uf_seleccionada = st.sidebar.radio("Unidad Funcional (UF):", opciones_uf, horizontal=True)
     if uf_seleccionada != "Todos":
         df_filtrado = df_filtrado[df_filtrado['UF'] == uf_seleccionada]
 
-# -- 2. FILTRO TRAMO --
 if 'TR' in df_filtrado.columns:
     opciones_tr = agregar_todos(df_filtrado['TR'].unique())
     tr_seleccionado = st.sidebar.radio("Tramo (TR):", opciones_tr, horizontal=True)
     if tr_seleccionado != "Todos":
         df_filtrado = df_filtrado[df_filtrado['TR'] == tr_seleccionado]
 
-# -- 3. FILTRO CALZADA --
 if 'calzada' in df_filtrado.columns:
     opciones_calzada = agregar_todos(df_filtrado['calzada'].unique())
     calzada_seleccionada = st.sidebar.radio("Calzada:", opciones_calzada, horizontal=True)
@@ -100,24 +96,21 @@ if 'calzada' in df_filtrado.columns:
 
 st.sidebar.markdown("---")
 
-# -- 4. FILTRO CARRIL --
 if 'CARRIL' in df_filtrado.columns:
     opciones_carril = df_filtrado['CARRIL'].unique()
     carril_seleccionados = st.sidebar.multiselect("Filtrar por Carril:", opciones_carril, default=opciones_carril)
     df_filtrado = df_filtrado[df_filtrado['CARRIL'].isin(carril_seleccionados)]
 
-# -- 5. FILTRO TIPO DE CAPA --
 opciones_capa = df_filtrado['Capa'].unique()
 capas_seleccionadas = st.sidebar.multiselect("Filtrar por Tipo de Capa:", opciones_capa, default=opciones_capa)
 df_filtrado = df_filtrado[df_filtrado['Capa'].isin(capas_seleccionadas)]
 
-# -- 6. FILTRO NÚMERO DE CAPA --
 if 'num' in df_filtrado.columns:
     opciones_num = df_filtrado['num'].unique()
     num_capa_seleccionados = st.sidebar.multiselect("Filtrar por Número de Capa:", opciones_num, default=opciones_num)
     df_filtrado = df_filtrado[df_filtrado['num'].isin(num_capa_seleccionados)]
 
-# -- NUEVO: MÁQUINA DEL TIEMPO (LÍNEA DE TIEMPO) --
+# -- MÁQUINA DEL TIEMPO --
 st.sidebar.markdown("---")
 st.sidebar.subheader("⏳ Máquina del Tiempo")
 if 'Fecha_Real' in df_filtrado.columns and not df_filtrado['Fecha_Real'].isna().all():
@@ -131,16 +124,15 @@ if 'Fecha_Real' in df_filtrado.columns and not df_filtrado['Fecha_Real'].isna().
             min_value=fecha_minima, 
             max_value=fecha_maxima, 
             value=fecha_maxima,
-            format="YYYY-MM-DD"
+            format="DD/MM/YYYY"
         )
-        # Filtramos para que solo queden los datos hasta la fecha seleccionada
         df_filtrado = df_filtrado[df_filtrado['Fecha_Real'].dt.date <= fecha_corte]
 else:
     st.sidebar.info("No hay fechas válidas para animar en este tramo.")
 
 st.title("🚧 Sistema de Gestión Vial")
 
-# 📈 TARJETAS DE INDICADORES (KPIs)
+# 📈 TARJETAS DE INDICADORES
 st.markdown("### Resumen de Ejecución")
 col1, col2, col3, col4 = st.columns(4)
 
@@ -161,10 +153,9 @@ else:
 
 st.markdown("---")
 
-# 4. SISTEMA DE PESTAÑAS (TABS) - AHORA SON 3 PESTAÑAS
+# 4. SISTEMA DE PESTAÑAS
 tab1, tab2, tab3 = st.tabs(["📊 Avance Físico (Trazabilidad)", "🔬 Control de Ensayos (Laboratorio)", "📈 Curva de Rendimiento"])
 
-# ----- PESTAÑA 1: AVANCE FÍSICO -----
 with tab1:
     if df_filtrado.empty:
         st.warning("No hay datos para mostrar.")
@@ -179,7 +170,6 @@ with tab1:
         fig1.update_yaxes(categoryorder='category ascending', showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="red", spikethickness=2)
         st.plotly_chart(fig1, use_container_width=True)
 
-# ----- PESTAÑA 2: CONTROL DE ENSAYOS -----
 with tab2:
     st.write("Selecciona el ensayo que deseas evaluar. El gráfico coloreará los tramos según el estado del resultado.")
     ensayo_a_revisar = st.radio("Ensayo a visualizar:", ['Planicidad', 'Densidad', 'Textura', 'Deslizamiento'], horizontal=True)
@@ -200,17 +190,14 @@ with tab2:
         fig2.update_yaxes(categoryorder='category ascending', showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="red", spikethickness=2)
         st.plotly_chart(fig2, use_container_width=True)
 
-# ----- PESTAÑA 3: CURVA DE RENDIMIENTO (NUEVA) -----
 with tab3:
     st.subheader("Evolución de Metros Construidos")
     if 'Fecha_Real' in df_filtrado.columns and not df_filtrado['Fecha_Real'].isna().all():
-        # Preparamos los datos sumando los metros por cada fecha cronológicamente
         df_rendimiento = df_filtrado.dropna(subset=['Fecha_Real']).copy()
         df_rendimiento = df_rendimiento.groupby('Fecha_Real')['Longitud'].sum().reset_index()
         df_rendimiento = df_rendimiento.sort_values('Fecha_Real')
         df_rendimiento['Metros Acumulados'] = df_rendimiento['Longitud'].cumsum()
         
-        # Dibujamos la curva
         fig3 = px.line(
             df_rendimiento, x='Fecha_Real', y='Metros Acumulados', markers=True,
             title="Curva de Rendimiento Acumulado"
