@@ -118,4 +118,121 @@ st.markdown("### Resumen de Ejecución")
 col1, col2, col3, col4 = st.columns(4)
 
 total_tramos = len(df_filtrado)
-col1.metric(label="Tramos Registrados", value=f"{total
+col1.metric(label="Tramos Registrados", value=f"{total_tramos}")
+
+longitud_total = df_filtrado['Longitud'].sum()
+col2.metric(label="Longitud Ejecutada (m)", value=f"{longitud_total:,.0f} m")
+
+km_totales = longitud_total / 1000
+col3.metric(label="Kilómetros Totales (km)", value=f"{km_totales:,.2f} km")
+
+if 'Planicidad' in df_filtrado.columns:
+    tramos_sin_planicidad = len(df_filtrado[df_filtrado['Planicidad'].str.contains('No reportado|Falta', case=False, na=True)])
+    col4.metric(label="Sin ensayo de Planicidad", value=f"{tramos_sin_planicidad} tramos")
+else:
+    col4.metric(label="Filtro Activo", value="Sí")
+
+st.markdown("---")
+
+# 4. SISTEMA DE PESTAÑAS
+tab1, tab2, tab3 = st.tabs(["📊 Avance Físico (Trazabilidad)", "🔬 Control de Ensayos (Laboratorio)", "📏 Perfil de Espesores"])
+
+with tab1:
+    if df_filtrado.empty:
+        st.warning("No hay datos para mostrar.")
+    else:
+        fig1 = px.bar(
+            df_filtrado, base="Abscisa_Inicial", x="Longitud", y="Capa_Carril", color="Capa",    
+            orientation='h', hover_name="Capa",
+            hover_data={'Abscisa_Inicial': True, 'Abscisa_Final': True, 'Longitud': False, 'Capa_Carril': False, 'Capa': False, 'num': True, 'FECHA DE EXTENSIÓN': True, 'calzada': True, 'observación': True}
+        )
+        fig1.update_layout(xaxis_title="Abscisas", yaxis_title="Capa (Num) | Carril", barmode='overlay', height=700, plot_bgcolor='white', hoverdistance=10)
+        fig1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='lightgray', tick0=0, dtick=500, showspikes=True, spikemode="across", spikesnap="cursor", showline=True, spikedash="solid", spikecolor="red", spikethickness=2)
+        fig1.update_yaxes(categoryorder='category ascending', showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="red", spikethickness=2)
+        st.plotly_chart(fig1, use_container_width=True)
+
+with tab2:
+    st.write("Selecciona el ensayo que deseas evaluar. El gráfico coloreará los tramos según el estado del resultado.")
+    ensayo_a_revisar = st.radio("Ensayo a visualizar:", ['Planicidad', 'Densidad', 'Textura', 'Deslizamiento'], horizontal=True)
+    
+    if df_filtrado.empty:
+        st.warning("No hay datos para mostrar.")
+    else:
+        fig2 = px.bar(
+            df_filtrado, base="Abscisa_Inicial", x="Longitud", y="Capa_Carril", color=ensayo_a_revisar, 
+            orientation='h', hover_name="Capa",
+            hover_data={
+                'Abscisa_Inicial': True, 'Abscisa_Final': True, 'Longitud': False, 'Capa_Carril': False, 'Capa': False, 'num': True,
+                'Planicidad': True, 'Densidad': True, 'Textura': True, 'Deslizamiento': True
+            }
+        )
+        fig2.update_layout(xaxis_title="Abscisas", yaxis_title="Capa (Num) | Carril", barmode='overlay', height=700, plot_bgcolor='white', hoverdistance=10)
+        fig2.update_xaxes(showgrid=True, gridwidth=1, gridcolor='lightgray', tick0=0, dtick=500, showspikes=True, spikemode="across", spikesnap="cursor", showline=True, spikedash="solid", spikecolor="red", spikethickness=2)
+        fig2.update_yaxes(categoryorder='category ascending', showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="red", spikethickness=2)
+        st.plotly_chart(fig2, use_container_width=True)
+
+# ----- PESTAÑA 3: PERFIL DE ESPESORES ACUMULADO -----
+with tab3:
+    st.subheader("Estructura del Pavimento (Perfil de Espesores)")
+    
+    if df_filtrado.empty or 'ESP cm' not in df_filtrado.columns:
+        st.warning("No hay datos de espesor para mostrar. Verifica que tu Excel tenga la columna 'ESP cm'.")
+    elif df_filtrado['ESP cm'].sum() == 0:
+        st.warning("Todos los valores de espesor son cero o están vacíos en los tramos filtrados.")
+    else:
+        df_espesores = df_filtrado.copy()
+        
+        # 1. Crear formato de abscisa tipo ingeniería (Ej: K1+500)
+        df_espesores['Abscisa_Format'] = "K" + (df_espesores['Abscisa_Inicial'] // 1000).astype(int).astype(str) + "+" + (df_espesores['Abscisa_Inicial'] % 1000).astype(int).astype(str).str.zfill(3)
+        
+        # 2. Ordenar cronológicamente/espacialmente para que la gráfica tenga sentido
+        df_espesores = df_espesores.sort_values(by=['Abscisa_Inicial', 'Capa'])
+        orden_x = df_espesores['Abscisa_Format'].unique()
+        
+        # 3. Graficar con separación automática por Carril (facet_row)
+        # Esto crea gráficos independientes hacia abajo si tienes más de un carril seleccionado
+        carriles_presentes = df_espesores['CARRIL'].unique() if 'CARRIL' in df_espesores.columns else []
+        
+        if len(carriles_presentes) > 1:
+            alto_grafico = max(600, 300 * len(carriles_presentes)) # Ajusta la altura si hay muchos carriles
+            fig3 = px.bar(
+                df_espesores,
+                x="Abscisa_Format",
+                y="ESP cm",
+                color="Capa",
+                facet_row="CARRIL", # Magia pura: crea una fila por cada carril
+                hover_name="Capa",
+                hover_data={'Abscisa_Format': False, 'Abscisa_Inicial': True, 'Abscisa_Final': True, 'num': True, 'ESP cm': True},
+                title="Espesor Acumulado por Abscisa y Carril",
+                barmode='stack' # Apila los centímetros uno sobre otro
+            )
+        else:
+            alto_grafico = 600
+            fig3 = px.bar(
+                df_espesores,
+                x="Abscisa_Format",
+                y="ESP cm",
+                color="Capa",
+                hover_name="Capa",
+                hover_data={'Abscisa_Format': False, 'Abscisa_Inicial': True, 'Abscisa_Final': True, 'num': True, 'ESP cm': True},
+                title="Espesor Acumulado por Abscisa",
+                barmode='stack'
+            )
+            
+        fig3.update_layout(
+            xaxis_title="Abscisa de Inicio",
+            yaxis_title="Espesor Total (cm)",
+            height=alto_grafico,
+            plot_bgcolor='white',
+            hoverlabel=dict(bgcolor="white", font_size=14)
+        )
+        
+        # Forzar el orden correcto en el eje X
+        fig3.update_xaxes(showgrid=True, gridcolor='lightgray', type='category', categoryorder='array', categoryarray=orden_x)
+        fig3.update_yaxes(showgrid=True, gridcolor='lightgray')
+        
+        st.plotly_chart(fig3, use_container_width=True)
+
+st.markdown("---")
+st.subheader("Base de Datos Dinámica")
+st.dataframe(df_filtrado, use_container_width=True)
