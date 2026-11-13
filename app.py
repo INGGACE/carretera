@@ -36,9 +36,11 @@ def cargar_datos():
     df['Longitud'] = df['Abscisa_Final'] - df['Abscisa_Inicial']
     df['Capa'] = df['Capa'].fillna("Sin definir").astype(str)
     
-    # Procesar fechas en segundo plano solo para la curva de rendimiento (si es posible)
-    if 'FECHA DE EXTENSIÓN' in df.columns:
-        df['Fecha_Real'] = pd.to_datetime(df['FECHA DE EXTENSIÓN'], errors='coerce', dayfirst=True)
+    # 🔴 NUEVO: Limpiar y extraer solo los números de la columna de espesores (ESP cm)
+    if 'ESP cm' in df.columns:
+        # Quitamos letras, dejamos solo números, puntos y comas, y forzamos a numérico
+        df['ESP cm'] = df['ESP cm'].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.')
+        df['ESP cm'] = pd.to_numeric(df['ESP cm'], errors='coerce').fillna(0)
     
     columnas_texto = ['UF', 'TR', 'calzada', 'CARRIL', 'num']
     for col in columnas_texto:
@@ -134,7 +136,7 @@ else:
 st.markdown("---")
 
 # 4. SISTEMA DE PESTAÑAS
-tab1, tab2, tab3 = st.tabs(["📊 Avance Físico (Trazabilidad)", "🔬 Control de Ensayos (Laboratorio)", "📈 Curva de Rendimiento"])
+tab1, tab2, tab3 = st.tabs(["📊 Avance Físico (Trazabilidad)", "🔬 Control de Ensayos (Laboratorio)", "📏 Perfil de Espesores"])
 
 with tab1:
     if df_filtrado.empty:
@@ -170,30 +172,50 @@ with tab2:
         fig2.update_yaxes(categoryorder='category ascending', showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="red", spikethickness=2)
         st.plotly_chart(fig2, use_container_width=True)
 
+# ----- NUEVA PESTAÑA 3: PERFIL DE ESPESORES -----
 with tab3:
-    st.subheader("Evolución de Metros Construidos")
-    if 'Fecha_Real' in df_filtrado.columns and not df_filtrado['Fecha_Real'].isna().all():
-        df_rendimiento = df_filtrado.dropna(subset=['Fecha_Real']).copy()
-        df_rendimiento = df_rendimiento.groupby('Fecha_Real')['Longitud'].sum().reset_index()
-        df_rendimiento = df_rendimiento.sort_values('Fecha_Real')
-        df_rendimiento['Metros Acumulados'] = df_rendimiento['Longitud'].cumsum()
+    st.subheader("Estructura del Pavimento (Perfil Transversal / Longitudinal)")
+    st.info("💡 **Consejo:** Para ver un perfil real sin espesores duplicados, asegúrate de **filtrar un solo Carril** en el menú de la izquierda.")
+    
+    if df_filtrado.empty or 'ESP cm' not in df_filtrado.columns:
+        st.warning("No hay datos de espesor para mostrar. Verifica que tu Excel tenga la columna 'ESP cm'.")
+    elif df_filtrado['ESP cm'].sum() == 0:
+        st.warning("Todos los valores de espesor son cero o están vacíos en los tramos filtrados.")
+    else:
+        # Preparamos los datos: creamos una etiqueta unida del tramo para el eje X
+        df_espesores = df_filtrado.copy()
         
-        fig3 = px.line(
-            df_rendimiento, x='Fecha_Real', y='Metros Acumulados', markers=True,
-            title="Curva de Rendimiento Acumulado"
+        # Etiqueta categórica para agrupar las barras (Ej: "K1000 - K1500")
+        df_espesores['Rango_Abscisa'] = df_espesores['Abscisa_Inicial'].astype(int).astype(str) + " a " + df_espesores['Abscisa_Final'].astype(int).astype(str)
+        
+        # Ordenamos de menor a mayor abscisa para que el gráfico tenga sentido vial
+        df_espesores = df_espesores.sort_values(by=['Abscisa_Inicial', 'Capa'])
+        
+        # Gráfico de barras apiladas verticales (Pastel estructural)
+        fig3 = px.bar(
+            df_espesores,
+            x="Rango_Abscisa",
+            y="ESP cm",
+            color="Capa",
+            hover_name="Capa",
+            hover_data={'Rango_Abscisa': False, 'CARRIL': True, 'num': True, 'ESP cm': True},
+            title="Espesores Instalados por Tramo (cm)"
         )
+        
         fig3.update_layout(
-            xaxis_title="Fecha de Ejecución", yaxis_title="Metros Acumulados (m)", 
-            plot_bgcolor='white', hovermode="x unified"
+            xaxis_title="Tramos (Abscisa Inicial a Final)",
+            yaxis_title="Espesor (cm)",
+            barmode='stack', # Apila las capas una encima de otra
+            height=600,
+            plot_bgcolor='white',
+            hoverlabel=dict(bgcolor="white", font_size=14)
         )
-        fig3.update_traces(line=dict(color="blue", width=3), marker=dict(size=8, color="red"))
-        fig3.update_xaxes(showgrid=True, gridcolor='lightgray')
+        
+        fig3.update_xaxes(showgrid=True, gridcolor='lightgray', type='category')
         fig3.update_yaxes(showgrid=True, gridcolor='lightgray')
         
         st.plotly_chart(fig3, use_container_width=True)
-    else:
-        st.warning("No hay suficientes fechas válidas en el formato correcto (DD/MM/AAAA) para generar esta curva.")
 
 st.markdown("---")
 st.subheader("Base de Datos Dinámica")
-st.dataframe(df_filtrado.drop(columns=['Fecha_Real'], errors='ignore'), use_container_width=True)
+st.dataframe(df_filtrado, use_container_width=True)
