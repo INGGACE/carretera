@@ -52,7 +52,7 @@ def cargar_datos():
         else:
             df[ensayo] = "Columna no encontrada"
             
-    # 🔴 MAGIA ESTRUCTURAL: Asignar un "peso" a cada capa para ordenarlas correctamente
+    # Asignar un "peso" a cada capa para ordenarlas estructuralmente
     def obtener_peso(capa):
         c = str(capa).lower()
         if 'rodadura' in c: return 50
@@ -60,11 +60,10 @@ def cargar_datos():
         if 'base' in c and 'sub' not in c: return 30
         if 'subbase' in c: return 20
         if 'subrasante' in c: return 10
-        return 0 # Cualquier otra capa desconocida irá al fondo
+        return 0 
     
     df['Peso_Capa'] = df['Capa'].apply(obtener_peso)
     
-    # Extraer el número de la capa para que la Capa 2 vaya encima de la 1
     if 'num' in df.columns:
         df['Num_Valor'] = pd.to_numeric(df['num'], errors='coerce').fillna(1)
         df['Capa_Num'] = df['Capa'] + " " + df['num'].astype(str)
@@ -72,7 +71,6 @@ def cargar_datos():
         df['Num_Valor'] = 1
         df['Capa_Num'] = df['Capa']
         
-    # Crear etiquetas combinadas para los ejes
     if 'CARRIL' in df.columns and 'num' in df.columns:
         df['Capa_Carril'] = df['Capa_Num'] + " | " + df['CARRIL']
     elif 'CARRIL' in df.columns:
@@ -80,7 +78,6 @@ def cargar_datos():
     else:
         df['Capa_Carril'] = df['Capa_Num']
         
-    # 🔴 ORDENAR EL DATAFRAME: Primero por el Peso de la capa, luego por el número, luego por abscisa
     df = df.sort_values(by=['Peso_Capa', 'Num_Valor', 'Abscisa_Inicial'])
         
     return df
@@ -150,7 +147,6 @@ else:
 
 st.markdown("---")
 
-# Obtener el orden estricto para Plotly basado en nuestra jerarquía
 orden_capa_carril = df_filtrado['Capa_Carril'].unique().tolist()
 orden_capas = df_filtrado['Capa'].unique().tolist()
 
@@ -165,7 +161,7 @@ with tab1:
             df_filtrado, base="Abscisa_Inicial", x="Longitud", y="Capa_Carril", color="Capa",    
             orientation='h', hover_name="Capa",
             hover_data={'Abscisa_Inicial': True, 'Abscisa_Final': True, 'Longitud': False, 'Capa_Carril': False, 'Capa': False, 'num': True, 'FECHA DE EXTENSIÓN': True, 'calzada': True, 'observación': True},
-            category_orders={"Capa_Carril": orden_capa_carril, "Capa": orden_capas} # Forzar el orden
+            category_orders={"Capa_Carril": orden_capa_carril, "Capa": orden_capas}
         )
         fig1.update_layout(xaxis_title="Abscisas", yaxis_title="Capa (Num) | Carril", barmode='overlay', height=700, plot_bgcolor='white', hoverdistance=10)
         fig1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='lightgray', tick0=0, dtick=500, showspikes=True, spikemode="across", spikesnap="cursor", showline=True, spikedash="solid", spikecolor="red", spikethickness=2)
@@ -183,14 +179,13 @@ with tab2:
             df_filtrado, base="Abscisa_Inicial", x="Longitud", y="Capa_Carril", color=ensayo_a_revisar, 
             orientation='h', hover_name="Capa",
             hover_data={'Abscisa_Inicial': True, 'Abscisa_Final': True, 'Longitud': False, 'Capa_Carril': False, 'Capa': False, 'num': True, 'Planicidad': True, 'Densidad': True, 'Textura': True, 'Deslizamiento': True},
-            category_orders={"Capa_Carril": orden_capa_carril} # Forzar el orden
+            category_orders={"Capa_Carril": orden_capa_carril}
         )
         fig2.update_layout(xaxis_title="Abscisas", yaxis_title="Capa (Num) | Carril", barmode='overlay', height=700, plot_bgcolor='white', hoverdistance=10)
         fig2.update_xaxes(showgrid=True, gridwidth=1, gridcolor='lightgray', tick0=0, dtick=500, showspikes=True, spikemode="across", spikesnap="cursor", showline=True, spikedash="solid", spikecolor="red", spikethickness=2)
         fig2.update_yaxes(showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="red", spikethickness=2)
         st.plotly_chart(fig2, use_container_width=True)
 
-# ----- PESTAÑA 3: PERFIL DE ESPESORES ESTRUCTURAL -----
 with tab3:
     st.subheader("Estructura del Pavimento (Perfil de Espesores)")
     
@@ -201,41 +196,46 @@ with tab3:
     else:
         df_espesores = df_filtrado.copy()
         
-        df_espesores['Abscisa_Format'] = "K" + (df_espesores['Abscisa_Inicial'] // 1000).astype(int).astype(str) + "+" + (df_espesores['Abscisa_Inicial'] % 1000).astype(int).astype(str).str.zfill(3)
+        # 🔴 SOLUCIÓN AL ERROR: Eliminamos las filas donde no haya escrito un abscisado para evitar el colapso
+        df_espesores = df_espesores.dropna(subset=['Abscisa_Inicial'])
         
-        # Obtenemos las listas de orden estrictas
-        orden_x = df_espesores.sort_values(by='Abscisa_Inicial')['Abscisa_Format'].unique().tolist()
-        orden_capa_num = df_espesores['Capa_Num'].unique().tolist()
-        
-        carriles_presentes = df_espesores['CARRIL'].unique() if 'CARRIL' in df_espesores.columns else []
-        
-        alto_grafico = max(600, 300 * len(carriles_presentes)) if len(carriles_presentes) > 1 else 600
-        
-        fig3 = px.bar(
-            df_espesores,
-            x="Abscisa_Format",
-            y="ESP cm",
-            color="Capa_Num", # Coloreamos distinguiendo el número de capa
-            facet_row="CARRIL" if len(carriles_presentes) > 1 else None,
-            hover_name="Capa_Num",
-            hover_data={'Abscisa_Format': False, 'Abscisa_Inicial': True, 'Abscisa_Final': True, 'ESP cm': True},
-            title="Espesor Acumulado por Abscisa y Carril",
-            barmode='stack',
-            category_orders={"Abscisa_Format": orden_x, "Capa_Num": orden_capa_num} # Forzamos el apilamiento Bottom-Up
-        )
+        if df_espesores.empty:
+            st.warning("No hay tramos con abscisa inicial válida para generar este gráfico.")
+        else:
+            df_espesores['Abscisa_Format'] = "K" + (df_espesores['Abscisa_Inicial'] // 1000).astype(int).astype(str) + "+" + (df_espesores['Abscisa_Inicial'] % 1000).astype(int).astype(str).str.zfill(3)
             
-        fig3.update_layout(
-            xaxis_title="Abscisa de Inicio",
-            yaxis_title="Espesor Total (cm)",
-            height=alto_grafico,
-            plot_bgcolor='white',
-            hoverlabel=dict(bgcolor="white", font_size=14)
-        )
-        
-        fig3.update_xaxes(showgrid=True, gridcolor='lightgray', type='category')
-        fig3.update_yaxes(showgrid=True, gridcolor='lightgray')
-        
-        st.plotly_chart(fig3, use_container_width=True)
+            orden_x = df_espesores.sort_values(by='Abscisa_Inicial')['Abscisa_Format'].unique().tolist()
+            orden_capa_num = df_espesores['Capa_Num'].unique().tolist()
+            
+            carriles_presentes = df_espesores['CARRIL'].unique() if 'CARRIL' in df_espesores.columns else []
+            
+            alto_grafico = max(600, 300 * len(carriles_presentes)) if len(carriles_presentes) > 1 else 600
+            
+            fig3 = px.bar(
+                df_espesores,
+                x="Abscisa_Format",
+                y="ESP cm",
+                color="Capa_Num",
+                facet_row="CARRIL" if len(carriles_presentes) > 1 else None,
+                hover_name="Capa_Num",
+                hover_data={'Abscisa_Format': False, 'Abscisa_Inicial': True, 'Abscisa_Final': True, 'ESP cm': True},
+                title="Espesor Acumulado por Abscisa y Carril",
+                barmode='stack',
+                category_orders={"Abscisa_Format": orden_x, "Capa_Num": orden_capa_num} 
+            )
+                
+            fig3.update_layout(
+                xaxis_title="Abscisa de Inicio",
+                yaxis_title="Espesor Total (cm)",
+                height=alto_grafico,
+                plot_bgcolor='white',
+                hoverlabel=dict(bgcolor="white", font_size=14)
+            )
+            
+            fig3.update_xaxes(showgrid=True, gridcolor='lightgray', type='category')
+            fig3.update_yaxes(showgrid=True, gridcolor='lightgray')
+            
+            st.plotly_chart(fig3, use_container_width=True)
 
 st.markdown("---")
 st.subheader("Base de Datos Dinámica")
