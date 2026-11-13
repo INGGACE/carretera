@@ -36,7 +36,6 @@ def cargar_datos():
     df['Longitud'] = df['Abscisa_Final'] - df['Abscisa_Inicial']
     df['Capa'] = df['Capa'].fillna("Sin definir").astype(str)
     
-    # Limpiar y extraer espesores (ESP cm)
     if 'ESP cm' in df.columns:
         df['ESP cm'] = df['ESP cm'].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.')
         df['ESP cm'] = pd.to_numeric(df['ESP cm'], errors='coerce').fillna(0)
@@ -53,20 +52,42 @@ def cargar_datos():
         else:
             df[ensayo] = "Columna no encontrada"
             
+    # 🔴 MAGIA ESTRUCTURAL: Asignar un "peso" a cada capa para ordenarlas correctamente
+    def obtener_peso(capa):
+        c = str(capa).lower()
+        if 'rodadura' in c: return 50
+        if 'intermedia' in c: return 40
+        if 'base' in c and 'sub' not in c: return 30
+        if 'subbase' in c: return 20
+        if 'subrasante' in c: return 10
+        return 0 # Cualquier otra capa desconocida irá al fondo
+    
+    df['Peso_Capa'] = df['Capa'].apply(obtener_peso)
+    
+    # Extraer el número de la capa para que la Capa 2 vaya encima de la 1
+    if 'num' in df.columns:
+        df['Num_Valor'] = pd.to_numeric(df['num'], errors='coerce').fillna(1)
+        df['Capa_Num'] = df['Capa'] + " " + df['num'].astype(str)
+    else:
+        df['Num_Valor'] = 1
+        df['Capa_Num'] = df['Capa']
+        
+    # Crear etiquetas combinadas para los ejes
     if 'CARRIL' in df.columns and 'num' in df.columns:
-        df['Capa_Carril'] = df['Capa'] + " " + df['num'] + " | " + df['CARRIL']
+        df['Capa_Carril'] = df['Capa_Num'] + " | " + df['CARRIL']
     elif 'CARRIL' in df.columns:
         df['Capa_Carril'] = df['Capa'] + " | " + df['CARRIL']
-    elif 'num' in df.columns:
-         df['Capa_Carril'] = df['Capa'] + " " + df['num']
     else:
-        df['Capa_Carril'] = df['Capa']
+        df['Capa_Carril'] = df['Capa_Num']
+        
+    # 🔴 ORDENAR EL DATAFRAME: Primero por el Peso de la capa, luego por el número, luego por abscisa
+    df = df.sort_values(by=['Peso_Capa', 'Num_Valor', 'Abscisa_Inicial'])
         
     return df
 
 df = cargar_datos()
 
-# 3. Menú Lateral Global (FILTROS EN CASCADA)
+# 3. Menú Lateral Global
 st.sidebar.header("🔘 Filtros en Cascada")
 if st.sidebar.button("Salir / Cerrar Sesión"):
     st.session_state["acceso_permitido"] = False
@@ -80,20 +101,17 @@ df_filtrado = df.copy()
 if 'UF' in df_filtrado.columns:
     opciones_uf = agregar_todos(df_filtrado['UF'].unique())
     uf_seleccionada = st.sidebar.radio("Unidad Funcional (UF):", opciones_uf, horizontal=True)
-    if uf_seleccionada != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['UF'] == uf_seleccionada]
+    if uf_seleccionada != "Todos": df_filtrado = df_filtrado[df_filtrado['UF'] == uf_seleccionada]
 
 if 'TR' in df_filtrado.columns:
     opciones_tr = agregar_todos(df_filtrado['TR'].unique())
     tr_seleccionado = st.sidebar.radio("Tramo (TR):", opciones_tr, horizontal=True)
-    if tr_seleccionado != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['TR'] == tr_seleccionado]
+    if tr_seleccionado != "Todos": df_filtrado = df_filtrado[df_filtrado['TR'] == tr_seleccionado]
 
 if 'calzada' in df_filtrado.columns:
     opciones_calzada = agregar_todos(df_filtrado['calzada'].unique())
     calzada_seleccionada = st.sidebar.radio("Calzada:", opciones_calzada, horizontal=True)
-    if calzada_seleccionada != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['calzada'] == calzada_seleccionada]
+    if calzada_seleccionada != "Todos": df_filtrado = df_filtrado[df_filtrado['calzada'] == calzada_seleccionada]
 
 st.sidebar.markdown("---")
 
@@ -119,10 +137,8 @@ col1, col2, col3, col4 = st.columns(4)
 
 total_tramos = len(df_filtrado)
 col1.metric(label="Tramos Registrados", value=f"{total_tramos}")
-
 longitud_total = df_filtrado['Longitud'].sum()
 col2.metric(label="Longitud Ejecutada (m)", value=f"{longitud_total:,.0f} m")
-
 km_totales = longitud_total / 1000
 col3.metric(label="Kilómetros Totales (km)", value=f"{km_totales:,.2f} km")
 
@@ -134,6 +150,10 @@ else:
 
 st.markdown("---")
 
+# Obtener el orden estricto para Plotly basado en nuestra jerarquía
+orden_capa_carril = df_filtrado['Capa_Carril'].unique().tolist()
+orden_capas = df_filtrado['Capa'].unique().tolist()
+
 # 4. SISTEMA DE PESTAÑAS
 tab1, tab2, tab3 = st.tabs(["📊 Avance Físico (Trazabilidad)", "🔬 Control de Ensayos (Laboratorio)", "📏 Perfil de Espesores"])
 
@@ -144,11 +164,12 @@ with tab1:
         fig1 = px.bar(
             df_filtrado, base="Abscisa_Inicial", x="Longitud", y="Capa_Carril", color="Capa",    
             orientation='h', hover_name="Capa",
-            hover_data={'Abscisa_Inicial': True, 'Abscisa_Final': True, 'Longitud': False, 'Capa_Carril': False, 'Capa': False, 'num': True, 'FECHA DE EXTENSIÓN': True, 'calzada': True, 'observación': True}
+            hover_data={'Abscisa_Inicial': True, 'Abscisa_Final': True, 'Longitud': False, 'Capa_Carril': False, 'Capa': False, 'num': True, 'FECHA DE EXTENSIÓN': True, 'calzada': True, 'observación': True},
+            category_orders={"Capa_Carril": orden_capa_carril, "Capa": orden_capas} # Forzar el orden
         )
         fig1.update_layout(xaxis_title="Abscisas", yaxis_title="Capa (Num) | Carril", barmode='overlay', height=700, plot_bgcolor='white', hoverdistance=10)
         fig1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='lightgray', tick0=0, dtick=500, showspikes=True, spikemode="across", spikesnap="cursor", showline=True, spikedash="solid", spikecolor="red", spikethickness=2)
-        fig1.update_yaxes(categoryorder='category ascending', showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="red", spikethickness=2)
+        fig1.update_yaxes(showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="red", spikethickness=2)
         st.plotly_chart(fig1, use_container_width=True)
 
 with tab2:
@@ -161,17 +182,15 @@ with tab2:
         fig2 = px.bar(
             df_filtrado, base="Abscisa_Inicial", x="Longitud", y="Capa_Carril", color=ensayo_a_revisar, 
             orientation='h', hover_name="Capa",
-            hover_data={
-                'Abscisa_Inicial': True, 'Abscisa_Final': True, 'Longitud': False, 'Capa_Carril': False, 'Capa': False, 'num': True,
-                'Planicidad': True, 'Densidad': True, 'Textura': True, 'Deslizamiento': True
-            }
+            hover_data={'Abscisa_Inicial': True, 'Abscisa_Final': True, 'Longitud': False, 'Capa_Carril': False, 'Capa': False, 'num': True, 'Planicidad': True, 'Densidad': True, 'Textura': True, 'Deslizamiento': True},
+            category_orders={"Capa_Carril": orden_capa_carril} # Forzar el orden
         )
         fig2.update_layout(xaxis_title="Abscisas", yaxis_title="Capa (Num) | Carril", barmode='overlay', height=700, plot_bgcolor='white', hoverdistance=10)
         fig2.update_xaxes(showgrid=True, gridwidth=1, gridcolor='lightgray', tick0=0, dtick=500, showspikes=True, spikemode="across", spikesnap="cursor", showline=True, spikedash="solid", spikecolor="red", spikethickness=2)
-        fig2.update_yaxes(categoryorder='category ascending', showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="red", spikethickness=2)
+        fig2.update_yaxes(showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="red", spikethickness=2)
         st.plotly_chart(fig2, use_container_width=True)
 
-# ----- PESTAÑA 3: PERFIL DE ESPESORES ACUMULADO -----
+# ----- PESTAÑA 3: PERFIL DE ESPESORES ESTRUCTURAL -----
 with tab3:
     st.subheader("Estructura del Pavimento (Perfil de Espesores)")
     
@@ -182,42 +201,28 @@ with tab3:
     else:
         df_espesores = df_filtrado.copy()
         
-        # 1. Crear formato de abscisa tipo ingeniería (Ej: K1+500)
         df_espesores['Abscisa_Format'] = "K" + (df_espesores['Abscisa_Inicial'] // 1000).astype(int).astype(str) + "+" + (df_espesores['Abscisa_Inicial'] % 1000).astype(int).astype(str).str.zfill(3)
         
-        # 2. Ordenar cronológicamente/espacialmente para que la gráfica tenga sentido
-        df_espesores = df_espesores.sort_values(by=['Abscisa_Inicial', 'Capa'])
-        orden_x = df_espesores['Abscisa_Format'].unique()
+        # Obtenemos las listas de orden estrictas
+        orden_x = df_espesores.sort_values(by='Abscisa_Inicial')['Abscisa_Format'].unique().tolist()
+        orden_capa_num = df_espesores['Capa_Num'].unique().tolist()
         
-        # 3. Graficar con separación automática por Carril (facet_row)
-        # Esto crea gráficos independientes hacia abajo si tienes más de un carril seleccionado
         carriles_presentes = df_espesores['CARRIL'].unique() if 'CARRIL' in df_espesores.columns else []
         
-        if len(carriles_presentes) > 1:
-            alto_grafico = max(600, 300 * len(carriles_presentes)) # Ajusta la altura si hay muchos carriles
-            fig3 = px.bar(
-                df_espesores,
-                x="Abscisa_Format",
-                y="ESP cm",
-                color="Capa",
-                facet_row="CARRIL", # Magia pura: crea una fila por cada carril
-                hover_name="Capa",
-                hover_data={'Abscisa_Format': False, 'Abscisa_Inicial': True, 'Abscisa_Final': True, 'num': True, 'ESP cm': True},
-                title="Espesor Acumulado por Abscisa y Carril",
-                barmode='stack' # Apila los centímetros uno sobre otro
-            )
-        else:
-            alto_grafico = 600
-            fig3 = px.bar(
-                df_espesores,
-                x="Abscisa_Format",
-                y="ESP cm",
-                color="Capa",
-                hover_name="Capa",
-                hover_data={'Abscisa_Format': False, 'Abscisa_Inicial': True, 'Abscisa_Final': True, 'num': True, 'ESP cm': True},
-                title="Espesor Acumulado por Abscisa",
-                barmode='stack'
-            )
+        alto_grafico = max(600, 300 * len(carriles_presentes)) if len(carriles_presentes) > 1 else 600
+        
+        fig3 = px.bar(
+            df_espesores,
+            x="Abscisa_Format",
+            y="ESP cm",
+            color="Capa_Num", # Coloreamos distinguiendo el número de capa
+            facet_row="CARRIL" if len(carriles_presentes) > 1 else None,
+            hover_name="Capa_Num",
+            hover_data={'Abscisa_Format': False, 'Abscisa_Inicial': True, 'Abscisa_Final': True, 'ESP cm': True},
+            title="Espesor Acumulado por Abscisa y Carril",
+            barmode='stack',
+            category_orders={"Abscisa_Format": orden_x, "Capa_Num": orden_capa_num} # Forzamos el apilamiento Bottom-Up
+        )
             
         fig3.update_layout(
             xaxis_title="Abscisa de Inicio",
@@ -227,8 +232,7 @@ with tab3:
             hoverlabel=dict(bgcolor="white", font_size=14)
         )
         
-        # Forzar el orden correcto en el eje X
-        fig3.update_xaxes(showgrid=True, gridcolor='lightgray', type='category', categoryorder='array', categoryarray=orden_x)
+        fig3.update_xaxes(showgrid=True, gridcolor='lightgray', type='category')
         fig3.update_yaxes(showgrid=True, gridcolor='lightgray')
         
         st.plotly_chart(fig3, use_container_width=True)
