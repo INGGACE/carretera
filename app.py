@@ -36,7 +36,7 @@ def cargar_datos():
     df['Longitud'] = df['Abscisa_Final'] - df['Abscisa_Inicial']
     df['Capa'] = df['Capa'].fillna("Sin definir").astype(str)
     
-    # 🔴 SOLUCIÓN FECHAS: Le decimos a Python que el día va primero (dayfirst=True)
+    # Procesar fechas en segundo plano solo para la curva de rendimiento (si es posible)
     if 'FECHA DE EXTENSIÓN' in df.columns:
         df['Fecha_Real'] = pd.to_datetime(df['FECHA DE EXTENSIÓN'], errors='coerce', dayfirst=True)
     
@@ -109,26 +109,6 @@ if 'num' in df_filtrado.columns:
     opciones_num = df_filtrado['num'].unique()
     num_capa_seleccionados = st.sidebar.multiselect("Filtrar por Número de Capa:", opciones_num, default=opciones_num)
     df_filtrado = df_filtrado[df_filtrado['num'].isin(num_capa_seleccionados)]
-
-# -- MÁQUINA DEL TIEMPO --
-st.sidebar.markdown("---")
-st.sidebar.subheader("⏳ Máquina del Tiempo")
-if 'Fecha_Real' in df_filtrado.columns and not df_filtrado['Fecha_Real'].isna().all():
-    fecha_minima = df_filtrado['Fecha_Real'].min().date()
-    fecha_maxima = df_filtrado['Fecha_Real'].max().date()
-    
-    if fecha_minima != fecha_maxima:
-        st.sidebar.write("Desliza para ver la obra en el pasado:")
-        fecha_corte = st.sidebar.slider(
-            "Visualizar obra hasta el:", 
-            min_value=fecha_minima, 
-            max_value=fecha_maxima, 
-            value=fecha_maxima,
-            format="DD/MM/YYYY"
-        )
-        df_filtrado = df_filtrado[df_filtrado['Fecha_Real'].dt.date <= fecha_corte]
-else:
-    st.sidebar.info("No hay fechas válidas para animar en este tramo.")
 
 st.title("🚧 Sistema de Gestión Vial")
 
@@ -212,7 +192,7 @@ with tab3:
         
         st.plotly_chart(fig3, use_container_width=True)
     else:
-        st.warning("Aún no hay fechas válidas registradas para generar la curva de rendimiento.")
+        st.warning("No hay suficientes fechas válidas en el formato correcto (DD/MM/AAAA) para generar esta curva.")
 
 st.markdown("---")
 st.subheader("Base de Datos Dinámica")
