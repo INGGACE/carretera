@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import datetime
 
 # 1. Configuración y Seguridad
 st.set_page_config(layout="wide", page_title="Avance de Obra Vial")
@@ -36,13 +37,15 @@ def cargar_datos():
     df['Longitud'] = df['Abscisa_Final'] - df['Abscisa_Inicial']
     df['Capa'] = df['Capa'].fillna("Sin definir").astype(str)
     
-    # Manejo de columnas estándar (incluyendo 'num' para el número de capa)
+    # NUEVO: Convertir la columna de fechas a un formato de tiempo real (DateTime)
+    if 'FECHA DE EXTENSIÓN' in df.columns:
+        df['Fecha_Real'] = pd.to_datetime(df['FECHA DE EXTENSIÓN'], errors='coerce')
+    
     columnas_texto = ['UF', 'TR', 'calzada', 'CARRIL', 'num']
     for col in columnas_texto:
         if col in df.columns:
             df[col] = df[col].fillna(f"Sin {col}").astype(str)
             
-    # Manejo de las nuevas columnas de ensayos
     ensayos = ['Planicidad', 'Densidad', 'Textura', 'Deslizamiento']
     for ensayo in ensayos:
         if ensayo in df.columns:
@@ -50,7 +53,6 @@ def cargar_datos():
         else:
             df[ensayo] = "Columna no encontrada"
             
-    # Ajustar el eje Y para mostrar Capa + Número (si existe) + Carril
     if 'CARRIL' in df.columns and 'num' in df.columns:
         df['Capa_Carril'] = df['Capa'] + " " + df['num'] + " | " + df['CARRIL']
     elif 'CARRIL' in df.columns:
@@ -64,8 +66,8 @@ def cargar_datos():
 
 df = cargar_datos()
 
-# 3. Menú Lateral Global
-st.sidebar.header("🔘 Filtros Globales")
+# 3. Menú Lateral Global (FILTROS EN CASCADA)
+st.sidebar.header("🔘 Filtros en Cascada")
 if st.sidebar.button("Salir / Cerrar Sesión"):
     st.session_state["acceso_permitido"] = False
     st.rerun()
@@ -73,47 +75,68 @@ if st.sidebar.button("Salir / Cerrar Sesión"):
 st.sidebar.markdown("---")
 def agregar_todos(lista): return ["Todos"] + list(lista)
 
-if 'UF' in df.columns:
-    uf_seleccionada = st.sidebar.radio("Unidad Funcional (UF):", agregar_todos(df['UF'].unique()), horizontal=True)
-else:
-    uf_seleccionada = "Todos"
+df_filtrado = df.copy()
 
-if 'TR' in df.columns:
-    tr_seleccionado = st.sidebar.radio("Tramo (TR):", agregar_todos(df['TR'].unique()), horizontal=True)
-else:
-    tr_seleccionado = "Todos"
+# -- 1. FILTRO UF --
+if 'UF' in df_filtrado.columns:
+    opciones_uf = agregar_todos(df_filtrado['UF'].unique())
+    uf_seleccionada = st.sidebar.radio("Unidad Funcional (UF):", opciones_uf, horizontal=True)
+    if uf_seleccionada != "Todos":
+        df_filtrado = df_filtrado[df_filtrado['UF'] == uf_seleccionada]
 
-if 'calzada' in df.columns:
-    calzada_seleccionada = st.sidebar.radio("Calzada:", agregar_todos(df['calzada'].unique()), horizontal=True)
-else:
-    calzada_seleccionada = "Todos"
+# -- 2. FILTRO TRAMO --
+if 'TR' in df_filtrado.columns:
+    opciones_tr = agregar_todos(df_filtrado['TR'].unique())
+    tr_seleccionado = st.sidebar.radio("Tramo (TR):", opciones_tr, horizontal=True)
+    if tr_seleccionado != "Todos":
+        df_filtrado = df_filtrado[df_filtrado['TR'] == tr_seleccionado]
+
+# -- 3. FILTRO CALZADA --
+if 'calzada' in df_filtrado.columns:
+    opciones_calzada = agregar_todos(df_filtrado['calzada'].unique())
+    calzada_seleccionada = st.sidebar.radio("Calzada:", opciones_calzada, horizontal=True)
+    if calzada_seleccionada != "Todos":
+        df_filtrado = df_filtrado[df_filtrado['calzada'] == calzada_seleccionada]
 
 st.sidebar.markdown("---")
-if 'CARRIL' in df.columns:
-    carril_seleccionados = st.sidebar.multiselect("Filtrar por Carril:", df['CARRIL'].unique(), default=df['CARRIL'].unique())
-else:
-    carril_seleccionados = []
 
-capas_seleccionadas = st.sidebar.multiselect("Filtrar por Tipo de Capa:", df['Capa'].unique(), default=df['Capa'].unique())
+# -- 4. FILTRO CARRIL --
+if 'CARRIL' in df_filtrado.columns:
+    opciones_carril = df_filtrado['CARRIL'].unique()
+    carril_seleccionados = st.sidebar.multiselect("Filtrar por Carril:", opciones_carril, default=opciones_carril)
+    df_filtrado = df_filtrado[df_filtrado['CARRIL'].isin(carril_seleccionados)]
 
-# -- NUEVO: FILTRO POR NÚMERO DE CAPA --
-if 'num' in df.columns:
-    num_capa_seleccionados = st.sidebar.multiselect("Filtrar por Número de Capa:", df['num'].unique(), default=df['num'].unique())
-else:
-    num_capa_seleccionados = []
-
-
-# Filtro general aplicado a todo
-df_filtrado = df.copy()
-if uf_seleccionada != "Todos": df_filtrado = df_filtrado[df_filtrado['UF'] == uf_seleccionada]
-if tr_seleccionado != "Todos": df_filtrado = df_filtrado[df_filtrado['TR'] == tr_seleccionado]
-if calzada_seleccionada != "Todos": df_filtrado = df_filtrado[df_filtrado['calzada'] == calzada_seleccionada]
-if 'CARRIL' in df.columns: df_filtrado = df_filtrado[df_filtrado['CARRIL'].isin(carril_seleccionados)]
+# -- 5. FILTRO TIPO DE CAPA --
+opciones_capa = df_filtrado['Capa'].unique()
+capas_seleccionadas = st.sidebar.multiselect("Filtrar por Tipo de Capa:", opciones_capa, default=opciones_capa)
 df_filtrado = df_filtrado[df_filtrado['Capa'].isin(capas_seleccionadas)]
 
-if 'num' in df.columns: 
+# -- 6. FILTRO NÚMERO DE CAPA --
+if 'num' in df_filtrado.columns:
+    opciones_num = df_filtrado['num'].unique()
+    num_capa_seleccionados = st.sidebar.multiselect("Filtrar por Número de Capa:", opciones_num, default=opciones_num)
     df_filtrado = df_filtrado[df_filtrado['num'].isin(num_capa_seleccionados)]
 
+# -- NUEVO: MÁQUINA DEL TIEMPO (LÍNEA DE TIEMPO) --
+st.sidebar.markdown("---")
+st.sidebar.subheader("⏳ Máquina del Tiempo")
+if 'Fecha_Real' in df_filtrado.columns and not df_filtrado['Fecha_Real'].isna().all():
+    fecha_minima = df_filtrado['Fecha_Real'].min().date()
+    fecha_maxima = df_filtrado['Fecha_Real'].max().date()
+    
+    if fecha_minima != fecha_maxima:
+        st.sidebar.write("Desliza para ver la obra en el pasado:")
+        fecha_corte = st.sidebar.slider(
+            "Visualizar obra hasta el:", 
+            min_value=fecha_minima, 
+            max_value=fecha_maxima, 
+            value=fecha_maxima,
+            format="YYYY-MM-DD"
+        )
+        # Filtramos para que solo queden los datos hasta la fecha seleccionada
+        df_filtrado = df_filtrado[df_filtrado['Fecha_Real'].dt.date <= fecha_corte]
+else:
+    st.sidebar.info("No hay fechas válidas para animar en este tramo.")
 
 st.title("🚧 Sistema de Gestión Vial")
 
@@ -138,8 +161,8 @@ else:
 
 st.markdown("---")
 
-# 4. SISTEMA DE PESTAÑAS (TABS)
-tab1, tab2 = st.tabs(["📊 Avance Físico (Trazabilidad)", "🔬 Control de Ensayos (Laboratorio)"])
+# 4. SISTEMA DE PESTAÑAS (TABS) - AHORA SON 3 PESTAÑAS
+tab1, tab2, tab3 = st.tabs(["📊 Avance Físico (Trazabilidad)", "🔬 Control de Ensayos (Laboratorio)", "📈 Curva de Rendimiento"])
 
 # ----- PESTAÑA 1: AVANCE FÍSICO -----
 with tab1:
@@ -177,6 +200,33 @@ with tab2:
         fig2.update_yaxes(categoryorder='category ascending', showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="red", spikethickness=2)
         st.plotly_chart(fig2, use_container_width=True)
 
+# ----- PESTAÑA 3: CURVA DE RENDIMIENTO (NUEVA) -----
+with tab3:
+    st.subheader("Evolución de Metros Construidos")
+    if 'Fecha_Real' in df_filtrado.columns and not df_filtrado['Fecha_Real'].isna().all():
+        # Preparamos los datos sumando los metros por cada fecha cronológicamente
+        df_rendimiento = df_filtrado.dropna(subset=['Fecha_Real']).copy()
+        df_rendimiento = df_rendimiento.groupby('Fecha_Real')['Longitud'].sum().reset_index()
+        df_rendimiento = df_rendimiento.sort_values('Fecha_Real')
+        df_rendimiento['Metros Acumulados'] = df_rendimiento['Longitud'].cumsum()
+        
+        # Dibujamos la curva
+        fig3 = px.line(
+            df_rendimiento, x='Fecha_Real', y='Metros Acumulados', markers=True,
+            title="Curva de Rendimiento Acumulado"
+        )
+        fig3.update_layout(
+            xaxis_title="Fecha de Ejecución", yaxis_title="Metros Acumulados (m)", 
+            plot_bgcolor='white', hovermode="x unified"
+        )
+        fig3.update_traces(line=dict(color="blue", width=3), marker=dict(size=8, color="red"))
+        fig3.update_xaxes(showgrid=True, gridcolor='lightgray')
+        fig3.update_yaxes(showgrid=True, gridcolor='lightgray')
+        
+        st.plotly_chart(fig3, use_container_width=True)
+    else:
+        st.warning("Aún no hay fechas válidas registradas para generar la curva de rendimiento.")
+
 st.markdown("---")
 st.subheader("Base de Datos Dinámica")
-st.dataframe(df_filtrado, use_container_width=True)
+st.dataframe(df_filtrado.drop(columns=['Fecha_Real'], errors='ignore'), use_container_width=True)
