@@ -129,21 +129,68 @@ else:
 
 st.markdown("---")
 
+# ==================================================
+# 🎨 PALETA DE COLORES REALISTA PARA LA CARRETERA
+# ==================================================
+# Le asignamos colores técnicos a las capas basándonos en cómo se llaman
+mapa_colores = {}
+for capa in df['Capa'].unique():
+    nombre_capa = str(capa).lower()
+    if 'rodadura' in nombre_capa:
+        mapa_colores[capa] = '#3b3b3b'  # Asfalto gris oscuro/negro
+    elif 'intermedia' in nombre_capa:
+        mapa_colores[capa] = '#696969'  # Asfalto gris medio
+    elif 'base' in nombre_capa and 'sub' not in nombre_capa:
+        mapa_colores[capa] = '#8b5a2b'  # Granular café/marrón
+    elif 'subbase' in nombre_capa:
+        mapa_colores[capa] = '#c2b280'  # Material arena/claro
+    elif 'subrasante' in nombre_capa:
+        mapa_colores[capa] = '#5c4033'  # Tierra oscura
+    else:
+        mapa_colores[capa] = '#4B8BBE'  # Color por defecto (Azul)
+
 # 4. SISTEMA DE PESTAÑAS
-tab1, tab2 = st.tabs(["📊 Avance Físico (Trazabilidad)", "🔬 Control de Ensayos (Laboratorio)"])
+tab1, tab2 = st.tabs(["🛣️ Vista en Planta (Avance Físico)", "🔬 Control de Ensayos (Laboratorio)"])
 
 with tab1:
     if df_filtrado.empty:
         st.warning("No hay datos para mostrar.")
     else:
+        # Gráfica estilizada como vista en planta (Top-Down)
         fig1 = px.bar(
             df_filtrado, base="Abscisa_Inicial", x="Longitud", y="Capa_Carril", color="Capa",    
             orientation='h', hover_name="Capa",
+            color_discrete_map=mapa_colores, # Aplicamos la paleta realista
             hover_data={'Abscisa_Inicial': True, 'Abscisa_Final': True, 'Longitud': False, 'Capa_Carril': False, 'Capa': False, 'num': True, 'FECHA DE EXTENSIÓN': True, 'calzada': True, 'observación': True}
         )
-        fig1.update_layout(xaxis_title="Abscisas", yaxis_title="Capa (Num) | Carril", barmode='overlay', height=700, plot_bgcolor='white', hoverdistance=10)
-        fig1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='lightgray', tick0=0, dtick=500, showspikes=True, spikemode="across", spikesnap="cursor", showline=True, spikedash="solid", spikecolor="red", spikethickness=2)
-        fig1.update_yaxes(categoryorder='category ascending', showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="red", spikethickness=2)
+        
+        # Diseño visual tipo plano de carretera
+        fig1.update_layout(
+            xaxis_title="Abscisas (Metros lineales)", 
+            yaxis_title="", # Quitamos el título del eje Y para que parezca más un mapa
+            barmode='overlay', 
+            height=600, 
+            plot_bgcolor='#f4f7f6', # Fondo gris/verdoso muy claro (simula el terreno exterior)
+            paper_bgcolor='white',
+            hoverdistance=10,
+            showlegend=True,
+            bargap=0.1 # Hace que las "franjas" de la vía sean más gruesas y juntas
+        )
+        
+        # Limpieza de cuadrículas para que parezca un dibujo técnico
+        fig1.update_xaxes(
+            showgrid=True, gridwidth=1, gridcolor='white', tick0=0, dtick=500, 
+            showspikes=True, spikemode="across", spikesnap="cursor", 
+            showline=True, linecolor='gray', spikedash="solid", spikecolor="orange", spikethickness=2
+        )
+        fig1.update_yaxes(
+            categoryorder='category descending', # Invierte el eje Y para que el Izquierdo quede arriba y el Derecho abajo
+            showgrid=False, # Quitamos las líneas horizontales
+            showspikes=True, spikemode="across", spikesnap="cursor", 
+            spikedash="solid", spikecolor="orange", spikethickness=2,
+            tickfont=dict(size=13, color='black', weight='bold')
+        )
+        
         st.plotly_chart(fig1, use_container_width=True)
 
 with tab2:
@@ -161,9 +208,9 @@ with tab2:
                 'Planicidad': True, 'Densidad': True, 'Textura': True, 'Deslizamiento': True
             }
         )
-        fig2.update_layout(xaxis_title="Abscisas", yaxis_title="Capa (Num) | Carril", barmode='overlay', height=700, plot_bgcolor='white', hoverdistance=10)
+        fig2.update_layout(xaxis_title="Abscisas", yaxis_title="Capa (Num) | Carril", barmode='overlay', height=600, plot_bgcolor='white', hoverdistance=10)
         fig2.update_xaxes(showgrid=True, gridwidth=1, gridcolor='lightgray', tick0=0, dtick=500, showspikes=True, spikemode="across", spikesnap="cursor", showline=True, spikedash="solid", spikecolor="red", spikethickness=2)
-        fig2.update_yaxes(categoryorder='category ascending', showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="red", spikethickness=2)
+        fig2.update_yaxes(categoryorder='category descending', showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="red", spikethickness=2)
         st.plotly_chart(fig2, use_container_width=True)
 
 st.markdown("---")
