@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import numpy as np
 
 # 1. Configuración y Seguridad
 st.set_page_config(layout="wide", page_title="Avance de Obra Vial")
@@ -36,7 +37,15 @@ def cargar_datos():
     df['Longitud'] = df['Abscisa_Final'] - df['Abscisa_Inicial']
     df['Capa'] = df['Capa'].fillna("Sin definir").astype(str)
     
-    columnas_texto = ['UF', 'TR', 'calzada', 'CARRIL', 'num']
+    # 🔴 NUEVO: Procesar el Ancho y calcular el Área
+    if 'Ancho' in df.columns:
+        df['Ancho'] = df['Ancho'].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.')
+        df['Ancho'] = pd.to_numeric(df['Ancho'], errors='coerce').fillna(0)
+        df['Area'] = df['Longitud'] * df['Ancho']
+    else:
+        df['Area'] = 0
+    
+    columnas_texto = ['UF', 'TR', 'calzada', 'CARRIL', 'num', 'FECHA DE EXTENSIÓN']
     for col in columnas_texto:
         if col in df.columns:
             df[col] = df[col].fillna(f"Sin {col}").astype(str)
@@ -129,27 +138,19 @@ else:
 
 st.markdown("---")
 
-# ==================================================
-# 🎨 PALETA DE COLORES REALISTA PARA LA CARRETERA
-# ==================================================
+# Paleta de colores Realista
 mapa_colores = {}
 for capa in df['Capa'].unique():
     nombre_capa = str(capa).lower()
-    if 'rodadura' in nombre_capa:
-        mapa_colores[capa] = '#3b3b3b'  # Asfalto gris oscuro/negro
-    elif 'intermedia' in nombre_capa:
-        mapa_colores[capa] = '#696969'  # Asfalto gris medio
-    elif 'base' in nombre_capa and 'sub' not in nombre_capa:
-        mapa_colores[capa] = '#8b5a2b'  # Granular café/marrón
-    elif 'subbase' in nombre_capa:
-        mapa_colores[capa] = '#c2b280'  # Material arena/claro
-    elif 'subrasante' in nombre_capa:
-        mapa_colores[capa] = '#5c4033'  # Tierra oscura
-    else:
-        mapa_colores[capa] = '#4B8BBE'  # Color por defecto (Azul)
+    if 'rodadura' in nombre_capa: mapa_colores[capa] = '#3b3b3b' 
+    elif 'intermedia' in nombre_capa: mapa_colores[capa] = '#696969' 
+    elif 'base' in nombre_capa and 'sub' not in nombre_capa: mapa_colores[capa] = '#8b5a2b'
+    elif 'subbase' in nombre_capa: mapa_colores[capa] = '#c2b280'
+    elif 'subrasante' in nombre_capa: mapa_colores[capa] = '#5c4033'
+    else: mapa_colores[capa] = '#4B8BBE'
 
 # 4. SISTEMA DE PESTAÑAS
-tab1, tab2 = st.tabs(["🛣️ Vista en Planta (Avance Físico)", "🔬 Control de Ensayos (Laboratorio)"])
+tab1, tab2 = st.tabs(["🛣️ Vista en Planta (Avance Físico)", "🔬 Control de Ensayos y Lotes"])
 
 with tab1:
     if df_filtrado.empty:
@@ -161,32 +162,9 @@ with tab1:
             color_discrete_map=mapa_colores, 
             hover_data={'Abscisa_Inicial': True, 'Abscisa_Final': True, 'Longitud': False, 'Capa_Carril': False, 'Capa': False, 'num': True, 'FECHA DE EXTENSIÓN': True, 'calzada': True, 'observación': True}
         )
-        
-        fig1.update_layout(
-            xaxis_title="Abscisas (Metros lineales)", 
-            yaxis_title="", 
-            barmode='overlay', 
-            height=600, 
-            plot_bgcolor='#f4f7f6', 
-            paper_bgcolor='white',
-            hoverdistance=10,
-            showlegend=True,
-            bargap=0.1 
-        )
-        
-        fig1.update_xaxes(
-            showgrid=True, gridwidth=1, gridcolor='white', tick0=0, dtick=500, 
-            showspikes=True, spikemode="across", spikesnap="cursor", 
-            showline=True, linecolor='gray', spikedash="solid", spikecolor="orange", spikethickness=2
-        )
-        fig1.update_yaxes(
-            categoryorder='category ascending', # CORREGIDO: Vuelve al orden natural
-            showgrid=False, 
-            showspikes=True, spikemode="across", spikesnap="cursor", 
-            spikedash="solid", spikecolor="orange", spikethickness=2,
-            tickfont=dict(size=13, color='black', weight='bold')
-        )
-        
+        fig1.update_layout(xaxis_title="Abscisas (Metros lineales)", yaxis_title="", barmode='overlay', height=600, plot_bgcolor='#f4f7f6', paper_bgcolor='white', hoverdistance=10, showlegend=True, bargap=0.1)
+        fig1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='white', tick0=0, dtick=500, showspikes=True, spikemode="across", spikesnap="cursor", showline=True, linecolor='gray', spikedash="solid", spikecolor="orange", spikethickness=2)
+        fig1.update_yaxes(categoryorder='category ascending', showgrid=False, showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="orange", spikethickness=2, tickfont=dict(size=13, color='black', weight='bold'))
         st.plotly_chart(fig1, use_container_width=True)
 
 with tab2:
@@ -204,15 +182,62 @@ with tab2:
                 'Planicidad': True, 'Densidad': True, 'Textura': True, 'Deslizamiento': True
             }
         )
-        fig2.update_layout(xaxis_title="Abscisas", yaxis_title="Capa (Num) | Carril", barmode='overlay', height=600, plot_bgcolor='white', hoverdistance=10)
+        fig2.update_layout(xaxis_title="Abscisas", yaxis_title="Capa (Num) | Carril", barmode='overlay', height=500, plot_bgcolor='white', hoverdistance=10)
         fig2.update_xaxes(showgrid=True, gridwidth=1, gridcolor='lightgray', tick0=0, dtick=500, showspikes=True, spikemode="across", spikesnap="cursor", showline=True, spikedash="solid", spikecolor="red", spikethickness=2)
-        
-        fig2.update_yaxes(
-            categoryorder='category ascending', # CORREGIDO: Vuelve al orden natural
-            showspikes=True, spikemode="across", spikesnap="cursor", 
-            spikedash="solid", spikecolor="red", spikethickness=2
-        )
+        fig2.update_yaxes(categoryorder='category ascending', showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="red", spikethickness=2)
         st.plotly_chart(fig2, use_container_width=True)
+        
+        # ==================================================
+        # 📋 MÓDULO DE AUDITORÍA DE LOTES NORMATIVOS
+        # ==================================================
+        st.markdown("---")
+        st.subheader("📋 Auditoría de Lotes (Cumplimiento Normativo)")
+        st.info(f"Calculando lotes para el ensayo de **{ensayo_a_revisar}** agrupados por Jornada y Capa. (Regla: 1 Jornada, 500m lineales o 3,500m²)")
+        
+        # Filtramos datos que sí tengan fecha válida
+        df_auditoria = df_filtrado[~df_filtrado['FECHA DE EXTENSIÓN'].str.contains("Sin FECHA", case=False, na=False)].copy()
+        
+        if not df_auditoria.empty and 'Area' in df_auditoria.columns and df_auditoria['Area'].sum() > 0:
+            
+            # Función para identificar si el ensayo realmente se hizo (Ignora los "Falta" o "No reportado")
+            def es_ensayo_valido(val):
+                val_str = str(val).lower()
+                if "no reportado" in val_str or "falta" in val_str or "columna no encontrada" in val_str or val_str == "nan":
+                    return 0
+                return 1
+            
+            df_auditoria['Ensayo_Realizado'] = df_auditoria[ensayo_a_revisar].apply(es_ensayo_valido)
+            
+            # Agrupar por fecha de extensión (Jornada) y Capa
+            resumen_lotes = df_auditoria.groupby(['FECHA DE EXTENSIÓN', 'Capa']).agg(
+                Longitud_Total=('Longitud', 'sum'),
+                Area_Total=('Area', 'sum'),
+                Ensayos_Hechos=('Ensayo_Realizado', 'sum')
+            ).reset_index()
+            
+            # MATEMÁTICA NORMATIVA (Redondeando hacia arriba con np.ceil)
+            resumen_lotes['Lotes_Longitud'] = np.ceil(resumen_lotes['Longitud_Total'] / 500)
+            resumen_lotes['Lotes_Area'] = np.ceil(resumen_lotes['Area_Total'] / 3500)
+            
+            # El requerimiento es el MÁXIMO entre el criterio de longitud y área (Garantizando mínimo 1 por jornada)
+            resumen_lotes['Lotes Exigidos'] = resumen_lotes[['Lotes_Longitud', 'Lotes_Area']].max(axis=1).clip(lower=1).astype(int)
+            
+            # Evaluar estado final
+            resumen_lotes['Estado Normativo'] = resumen_lotes.apply(
+                lambda x: "✅ Cumple" if x['Ensayos_Hechos'] >= x['Lotes Exigidos'] 
+                else f"❌ Faltan {int(x['Lotes Exigidos'] - x['Ensayos_Hechos'])} ensayos", axis=1
+            )
+            
+            # Darle formato bonito para leerlo fácil
+            resumen_lotes['Longitud_Total'] = resumen_lotes['Longitud_Total'].map("{:,.0f} m".format)
+            resumen_lotes['Area_Total'] = resumen_lotes['Area_Total'].map("{:,.0f} m²".format)
+            
+            # Mostrar la tabla final
+            tabla_final = resumen_lotes[['FECHA DE EXTENSIÓN', 'Capa', 'Longitud_Total', 'Area_Total', 'Lotes Exigidos', 'Ensayos_Hechos', 'Estado Normativo']]
+            st.dataframe(tabla_final.sort_values(by='FECHA DE EXTENSIÓN', ascending=False), use_container_width=True)
+            
+        else:
+            st.warning("⚠️ No se encontraron jornadas de trabajo válidas o los valores de 'Ancho' están en cero. Verifica el Excel.")
 
 st.markdown("---")
 st.subheader("Base de Datos Dinámica")
