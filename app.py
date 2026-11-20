@@ -37,7 +37,6 @@ def cargar_datos():
     df['Longitud'] = df['Abscisa_Final'] - df['Abscisa_Inicial']
     df['Capa'] = df['Capa'].fillna("Sin definir").astype(str)
     
-    # 🔴 NUEVO: Procesar el Ancho y calcular el Área
     if 'Ancho' in df.columns:
         df['Ancho'] = df['Ancho'].astype(str).str.replace(r'[^\d.,]', '', regex=True).str.replace(',', '.')
         df['Ancho'] = pd.to_numeric(df['Ancho'], errors='coerce').fillna(0)
@@ -149,9 +148,12 @@ for capa in df['Capa'].unique():
     elif 'subrasante' in nombre_capa: mapa_colores[capa] = '#5c4033'
     else: mapa_colores[capa] = '#4B8BBE'
 
-# 4. SISTEMA DE PESTAÑAS
-tab1, tab2 = st.tabs(["🛣️ Vista en Planta (Avance Físico)", "🔬 Control de Ensayos y Lotes"])
+# ==================================================
+# 4. INTERFAZ DE TRES PESTAÑAS (MÓDULOS)
+# ==================================================
+tab1, tab2, tab3 = st.tabs(["🛣️ Avance de Obra", "🔬 Producto Terminado", "📋 Cálculo de Lotes"])
 
+# --- MÓDULO 1: AVANCE DE OBRA ---
 with tab1:
     if df_filtrado.empty:
         st.warning("No hay datos para mostrar.")
@@ -167,15 +169,17 @@ with tab1:
         fig1.update_yaxes(categoryorder='category ascending', showgrid=False, showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="orange", spikethickness=2, tickfont=dict(size=13, color='black', weight='bold'))
         st.plotly_chart(fig1, use_container_width=True)
 
+# --- MÓDULO 2: PRODUCTO TERMINADO ---
 with tab2:
     st.write("Selecciona el ensayo que deseas evaluar. El gráfico coloreará los tramos según el estado del resultado.")
-    ensayo_a_revisar = st.radio("Ensayo a visualizar:", ['Planicidad', 'Densidad', 'Textura', 'Deslizamiento'], horizontal=True)
+    # Agregamos 'key' para que no pelee con el selector de la pestaña 3
+    ensayo_grafico = st.radio("Ensayo a visualizar:", ['Planicidad', 'Densidad', 'Textura', 'Deslizamiento'], horizontal=True, key="radio_grafico")
     
     if df_filtrado.empty:
         st.warning("No hay datos para mostrar.")
     else:
         fig2 = px.bar(
-            df_filtrado, base="Abscisa_Inicial", x="Longitud", y="Capa_Carril", color=ensayo_a_revisar, 
+            df_filtrado, base="Abscisa_Inicial", x="Longitud", y="Capa_Carril", color=ensayo_grafico, 
             orientation='h', hover_name="Capa",
             hover_data={
                 'Abscisa_Inicial': True, 'Abscisa_Final': True, 'Longitud': False, 'Capa_Carril': False, 'Capa': False, 'num': True,
@@ -187,57 +191,49 @@ with tab2:
         fig2.update_yaxes(categoryorder='category ascending', showspikes=True, spikemode="across", spikesnap="cursor", spikedash="solid", spikecolor="red", spikethickness=2)
         st.plotly_chart(fig2, use_container_width=True)
         
-        # ==================================================
-        # 📋 MÓDULO DE AUDITORÍA DE LOTES NORMATIVOS
-        # ==================================================
-        st.markdown("---")
-        st.subheader("📋 Auditoría de Lotes (Cumplimiento Normativo)")
-        st.info(f"Calculando lotes para el ensayo de **{ensayo_a_revisar}** agrupados por Jornada y Capa. (Regla: 1 Jornada, 500m lineales o 3,500m²)")
+# --- MÓDULO 3: CÁLCULO DE LOTES ---
+with tab3:
+    st.subheader("Auditoría de Lotes (Cumplimiento Normativo)")
+    st.write("Calculando lotes requeridos agrupados por Jornada y Capa. (Regla: 1 Jornada, 500m lineales o 3,500m²)")
+    
+    ensayo_auditoria = st.radio("Selecciona el ensayo a auditar:", ['Planicidad', 'Densidad', 'Textura', 'Deslizamiento'], horizontal=True, key="radio_auditoria")
+    
+    df_auditoria = df_filtrado[~df_filtrado['FECHA DE EXTENSIÓN'].str.contains("Sin FECHA", case=False, na=False)].copy()
+    
+    if not df_auditoria.empty and 'Area' in df_auditoria.columns and df_auditoria['Area'].sum() > 0:
         
-        # Filtramos datos que sí tengan fecha válida
-        df_auditoria = df_filtrado[~df_filtrado['FECHA DE EXTENSIÓN'].str.contains("Sin FECHA", case=False, na=False)].copy()
+        def es_ensayo_valido(val):
+            val_str = str(val).lower()
+            if "no reportado" in val_str or "falta" in val_str or "columna no encontrada" in val_str or val_str == "nan":
+                return 0
+            return 1
         
-        if not df_auditoria.empty and 'Area' in df_auditoria.columns and df_auditoria['Area'].sum() > 0:
-            
-            # Función para identificar si el ensayo realmente se hizo (Ignora los "Falta" o "No reportado")
-            def es_ensayo_valido(val):
-                val_str = str(val).lower()
-                if "no reportado" in val_str or "falta" in val_str or "columna no encontrada" in val_str or val_str == "nan":
-                    return 0
-                return 1
-            
-            df_auditoria['Ensayo_Realizado'] = df_auditoria[ensayo_a_revisar].apply(es_ensayo_valido)
-            
-            # Agrupar por fecha de extensión (Jornada) y Capa
-            resumen_lotes = df_auditoria.groupby(['FECHA DE EXTENSIÓN', 'Capa']).agg(
-                Longitud_Total=('Longitud', 'sum'),
-                Area_Total=('Area', 'sum'),
-                Ensayos_Hechos=('Ensayo_Realizado', 'sum')
-            ).reset_index()
-            
-            # MATEMÁTICA NORMATIVA (Redondeando hacia arriba con np.ceil)
-            resumen_lotes['Lotes_Longitud'] = np.ceil(resumen_lotes['Longitud_Total'] / 500)
-            resumen_lotes['Lotes_Area'] = np.ceil(resumen_lotes['Area_Total'] / 3500)
-            
-            # El requerimiento es el MÁXIMO entre el criterio de longitud y área (Garantizando mínimo 1 por jornada)
-            resumen_lotes['Lotes Exigidos'] = resumen_lotes[['Lotes_Longitud', 'Lotes_Area']].max(axis=1).clip(lower=1).astype(int)
-            
-            # Evaluar estado final
-            resumen_lotes['Estado Normativo'] = resumen_lotes.apply(
-                lambda x: "✅ Cumple" if x['Ensayos_Hechos'] >= x['Lotes Exigidos'] 
-                else f"❌ Faltan {int(x['Lotes Exigidos'] - x['Ensayos_Hechos'])} ensayos", axis=1
-            )
-            
-            # Darle formato bonito para leerlo fácil
-            resumen_lotes['Longitud_Total'] = resumen_lotes['Longitud_Total'].map("{:,.0f} m".format)
-            resumen_lotes['Area_Total'] = resumen_lotes['Area_Total'].map("{:,.0f} m²".format)
-            
-            # Mostrar la tabla final
-            tabla_final = resumen_lotes[['FECHA DE EXTENSIÓN', 'Capa', 'Longitud_Total', 'Area_Total', 'Lotes Exigidos', 'Ensayos_Hechos', 'Estado Normativo']]
-            st.dataframe(tabla_final.sort_values(by='FECHA DE EXTENSIÓN', ascending=False), use_container_width=True)
-            
-        else:
-            st.warning("⚠️ No se encontraron jornadas de trabajo válidas o los valores de 'Ancho' están en cero. Verifica el Excel.")
+        df_auditoria['Ensayo_Realizado'] = df_auditoria[ensayo_auditoria].apply(es_ensayo_valido)
+        
+        resumen_lotes = df_auditoria.groupby(['FECHA DE EXTENSIÓN', 'Capa']).agg(
+            Longitud_Total=('Longitud', 'sum'),
+            Area_Total=('Area', 'sum'),
+            Ensayos_Hechos=('Ensayo_Realizado', 'sum')
+        ).reset_index()
+        
+        resumen_lotes['Lotes_Longitud'] = np.ceil(resumen_lotes['Longitud_Total'] / 500)
+        resumen_lotes['Lotes_Area'] = np.ceil(resumen_lotes['Area_Total'] / 3500)
+        
+        resumen_lotes['Lotes Exigidos'] = resumen_lotes[['Lotes_Longitud', 'Lotes_Area']].max(axis=1).clip(lower=1).astype(int)
+        
+        resumen_lotes['Estado Normativo'] = resumen_lotes.apply(
+            lambda x: "✅ Cumple" if x['Ensayos_Hechos'] >= x['Lotes Exigidos'] 
+            else f"❌ Faltan {int(x['Lotes Exigidos'] - x['Ensayos_Hechos'])} ensayos", axis=1
+        )
+        
+        resumen_lotes['Longitud_Total'] = resumen_lotes['Longitud_Total'].map("{:,.0f} m".format)
+        resumen_lotes['Area_Total'] = resumen_lotes['Area_Total'].map("{:,.0f} m²".format)
+        
+        tabla_final = resumen_lotes[['FECHA DE EXTENSIÓN', 'Capa', 'Longitud_Total', 'Area_Total', 'Lotes Exigidos', 'Ensayos_Hechos', 'Estado Normativo']]
+        st.dataframe(tabla_final.sort_values(by='FECHA DE EXTENSIÓN', ascending=False), use_container_width=True)
+        
+    else:
+        st.warning("⚠️ No se encontraron jornadas de trabajo válidas o los valores de 'Ancho' están en cero. Verifica el Excel.")
 
 st.markdown("---")
 st.subheader("Base de Datos Dinámica")
